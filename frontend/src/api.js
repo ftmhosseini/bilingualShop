@@ -8,15 +8,18 @@ api.interceptors.request.use(cfg => {
   return cfg;
 });
 
-// Suppress unhandled network errors from the dev overlay
 api.interceptors.response.use(
   res => res,
-  err => {
-    // Re-throw so callers that have .catch() still handle it,
-    // but mark it so React's dev overlay ignores it
-    if (err && err.response) err._handled = true;
-    return Promise.reject(err);
-  }
+  err => Promise.reject(err)
 );
+
+// Suppress network error noise in React dev overlay
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', e => {
+    if (e?.reason?.code === 'ERR_NETWORK' || e?.reason?.message === 'Network Error') {
+      e.preventDefault();
+    }
+  });
+}
 
 export default api;

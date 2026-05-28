@@ -11,47 +11,63 @@ function generateCode() {
 
 // Step 1: Register — send verification code
 router.post('/register', async (req, res) => {
-  const { identifier, password } = req.body; // identifier = email or phone
-  if (!identifier || !password) return res.status(400).json({ error: 'identifier and password required' });
+  const { email, phone, password, first_name, last_name, username } = req.body;
+  if (!email && !phone) return res.status(400).json({ error: 'Email or phone required' });
+  if (!password) return res.status(400).json({ error: 'Password required' });
+  if (!username) return res.status(400).json({ error: 'Username required' });
 
-  const isEmail = identifier.includes('@');
   const db = await getPool();
 
-  // Check duplicate
-  const field = isEmail ? 'email' : 'phone';
-  const [existing] = await db.execute(`SELECT id FROM users WHERE ${field} = ?`, [identifier]);
-  if (existing.length > 0) return res.status(409).json({ error: `${field} already in use` });
+  // Check duplicates
+  const [existingUsername] = await db.execute('SELECT id FROM users WHERE username = ?', [username]);
+  if (existingUsername.length > 0) return res.status(409).json({ error: 'Username already in use' });
+  if (email) {
+    const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing.length > 0) return res.status(409).json({ error: 'Email already in use' });
+  }
+  if (phone) {
+    const [existing] = await db.execute('SELECT id FROM users WHERE phone = ?', [phone]);
+    if (existing.length > 0) return res.status(409).json({ error: 'Phone already in use' });
+  }
+
+  // Check if admin has enabled verification
+  const [settingRows] = await db.execute("SELECT value FROM site_settings WHERE key_name = 'require_verification'");
+  const requireVerification = settingRows[0]?.value === '1';
 
   const hash = await bcrypt.hash(password, 10);
-  const code = generateCode();
-  const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-  // Upsert unverified user
+  if (requireVerification) {
+    const code = generateCode();
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
+    await db.execute(
+      `INSERT INTO users (username, email, phone, password, first_name, last_name, role, verified, verify_code, verify_expires) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [username, email || null, phone || null, hash, first_name || null, last_name || null, 'customer', 0, code, expires]
+    );
+    const isEmail = !!email;
+    if (isEmail) {
+      try { await sendVerificationEmail(email, code); } catch (err) {
+        console.error('Email error:', err.message);
+        return res.status(500).json({ error: 'Failed to send email' });
+      }
+    }
+    if (phone) {
+      try { await sendVerificationSMS(phone, code); } catch (err) {
+        console.error('SMS error:', err.message);
+        return res.status(500).json({ error: 'Failed to send SMS' });
+      }
+    }
+    return res.json({ message: 'Verification code sent', requireVerification: true, isEmail });
+  }
+
+  // No verification — register directly
   await db.execute(
-    `INSERT INTO users (${field}, password, role, verified, verify_code, verify_expires) VALUES (?,?,?,?,?,?)
-     ON DUPLICATE KEY UPDATE password=?, verify_code=?, verify_expires=?, verified=0`,
-    [identifier, hash, 'customer', 0, code, expires, hash, code, expires]
+    `INSERT INTO users (username, email, phone, password, first_name, last_name, role, verified) VALUES (?,?,?,?,?,?,?,?)`,
+    [username, email || null, phone || null, hash, first_name || null, last_name || null, 'customer', 1]
   );
-
-  if (isEmail) {
-    try {
-      await sendVerificationEmail(identifier, code);
-    } catch (err) {
-      console.error('Email error:', err.message);
-      return res.status(500).json({ error: 'Failed to send email' });
-    }
-  }
-  // Phone: send SMS via Kavenegar
-  if (!isEmail) {
-    try {
-      await sendVerificationSMS(identifier, code);
-    } catch (err) {
-      console.error('SMS error:', err.message);
-      return res.status(500).json({ error: 'Failed to send SMS' });
-    }
-  }
-
-  res.json({ message: 'Verification code sent', isEmail });
+  const [newUser] = await db.execute('SELECT id, email, phone, role FROM users WHERE username = ?', [username]);
+  const user = newUser[0];
+  const token = jwt.sign({ id: user.id, email: user.email, phone: user.phone, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  res.json({ token, role: user.role });
 });
 
 // Step 2: Verify code
@@ -136,11 +152,11 @@ router.post('/reset-password', async (req, res) => {
 
 // Login
 router.post('/login', async (req, res) => {
-  const { identifier, password } = req.body;
-  const field = identifier?.includes('@') ? 'email' : 'phone';
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   try {
     const db = await getPool();
-    const [rows] = await db.execute(`SELECT * FROM users WHERE ${field} = ?`, [identifier]);
+    const [rows] = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
     const user = rows[0];
     if (!user || !(await bcrypt.compare(password, user.password)))
       return res.status(401).json({ error: 'Invalid credentials' });

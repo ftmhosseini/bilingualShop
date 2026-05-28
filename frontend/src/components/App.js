@@ -78,6 +78,7 @@ export default function App() {
       <AuthProvider>
         <CartProvider>
           <BrowserRouter>
+            <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <PageTitleSetter pageTitles={pageTitles} />
             <Navbar />
             <Routes>
@@ -108,6 +109,7 @@ export default function App() {
               </Route>
             </Routes>
             <Footer />
+            </div>
           </BrowserRouter>
         </CartProvider>
       </AuthProvider>

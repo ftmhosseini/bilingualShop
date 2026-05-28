@@ -18,7 +18,7 @@ export default function Footer() {
   }, []);
 
   return (
-    <footer style={{ background: '#232f3e', color: '#ccc', textAlign: 'center', padding: '24px 16px', marginTop: 40 }}>
+    <footer style={{ background: '#232f3e', color: '#ccc', textAlign: 'center', padding: '24px 16px', marginTop: 'auto' }}>
 <div style={{display:'flex', justifyContent:'space-evenly'}}>
       {/* Trust badges */}
       {badges.length > 0 && (

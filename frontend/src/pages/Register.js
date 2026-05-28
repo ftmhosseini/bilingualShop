@@ -9,8 +9,13 @@ export default function Register() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
-  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -30,13 +35,24 @@ export default function Register() {
 
   const L = (key, fallback) => labels[key] || fallback;
 
-  const sendCode = async e => {
+  const identifier = email || phone;
+
+  const handleRegister = async e => {
     e.preventDefault();
-    setError(''); setLoading(true);
+    setError('');
+    if (!email && !phone) { setError('Email or phone is required'); return; }
+    if (!username) { setError('Username is required'); return; }
+    if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    setLoading(true);
     try {
-      const { data } = await api.post('/api/auth/register', { identifier, password });
-      setInfo(data.dev_code ? `Dev mode — code: ${data.dev_code}` : 'Verification code sent!');
-      setStep(2);
+      const { data } = await api.post('/api/auth/register', { username, email: email || undefined, phone: phone || undefined, password, first_name: firstName || undefined, last_name: lastName || undefined });
+      if (data.requireVerification) {
+        setInfo(data.dev_code ? `Dev mode — code: ${data.dev_code}` : 'Verification code sent!');
+        setStep(2);
+      } else {
+        login(data.token, data.role, identifier);
+        navigate('/');
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed');
     } finally { setLoading(false); }
@@ -69,19 +85,40 @@ export default function Register() {
         {info && <p style={{ color: 'green', marginBottom: 12 }}>{info}</p>}
 
         {step === 1 ? (
-          <form onSubmit={sendCode}>
+          <form onSubmit={handleRegister}>
             <div className="form-group">
-              <label>{L('register_identifier', 'Email or Phone')}</label>
-              <input value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder={L('login_identifier_placeholder', 'email@example.com or +1234567890')} required />
+              <label>{L('register_username', 'Username')} *</label>
+              <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" required />
             </div>
             <div className="form-group">
+              <label>{L('register_first_name', 'First Name')}</label>
+              <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="First Name" />
+            </div>
+            <div className="form-group">
+              <label>{L('register_last_name', 'Last Name')}</label>
+              <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Last Name" />
+            </div>
+            <div className="form-group">
+              <label>{L('register_email', 'Email')} *</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="email@example.com" />
+            </div>
+            <div className="form-group">
+              <label>{L('register_phone', 'Phone')} *</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1234567890" />
+            </div>
+            <p style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>* At least one of email or phone is required</p>
+            <div className="form-group">
               <label>{L('register_password', t('password'))}</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" required />
+            </div>
+            <div className="form-group">
+              <label>{L('register_confirm_password', 'Confirm Password')}</label>
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm Password" required />
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <Link to="/login" className="btn" style={{ flex: 1, background: '#232f3e', color: '#fff', textAlign: 'center', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{L('login_button', t('login'))}</Link>
               <button type="submit" className="btn" style={{ flex: 1, background: '#febd69', color: '#131921' }} disabled={loading}>
-                {loading ? '...' : L('register_button', 'Send Verification Code')}
+                {loading ? '...' : L('register_button', 'Register')}
               </button>
             </div>
           </form>

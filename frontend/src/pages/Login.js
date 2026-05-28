@@ -8,7 +8,7 @@ export default function Login() {
   const { t, i18n } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [identifier, setIdentifier] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [forgot, setForgot] = useState(0);
@@ -35,8 +35,8 @@ export default function Login() {
   const submit = async e => {
     e.preventDefault();
     try {
-      const { data } = await api.post('/api/auth/login', { identifier, password });
-      login(data.token, data.role, identifier);
+      const { data } = await api.post('/api/auth/login', { username, password });
+      login(data.token, data.role, username);
       navigate('/');
     } catch (err) {
       const msg = err.response?.data?.error || 'Login failed';
@@ -64,7 +64,6 @@ export default function Login() {
       await api.post('/api/auth/reset-password', { identifier: resetId, code, password: newPass });
       setInfo('Password reset! You can now login.');
       setForgot(0);
-      setIdentifier(resetId);
       setPassword('');
     } catch (err) {
       setError(err.response?.data?.error || 'Reset failed');
@@ -135,8 +134,8 @@ export default function Login() {
         {info && <p style={{ color: 'green', marginBottom: 12 }}>{info}</p>}
         <form onSubmit={submit}>
           <div className="form-group">
-            <label>{L('login_identifier', 'Email or Phone')}</label>
-            <input value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder={L('login_identifier_placeholder', 'email@example.com or +1234567890')} required />
+            <label>{L('login_username', 'Username')}</label>
+            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" required />
           </div>
           <div className="form-group">
             <label>{L('login_password', t('password'))}</label>

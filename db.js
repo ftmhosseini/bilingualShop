@@ -98,6 +98,7 @@ async function initDB() {
     ["users", "verify_expires", "DATETIME"],
     ["users", "first_name", "VARCHAR(100)"],
     ["users", "last_name", "VARCHAR(100)"],
+    ["users", "username", "VARCHAR(100) UNIQUE"],
     ["products", "created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"],
     ["products", "discount_type", "VARCHAR(20) DEFAULT 'none'"],
     ["products", "discount_value", "DECIMAL(10,2) DEFAULT 0"],
@@ -278,10 +279,11 @@ async function initDB() {
 
   // Seed admin
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@nuttymilk.com';
+  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
   const [rows] = await db.execute('SELECT id FROM users WHERE email = ?', [adminEmail]);
   if (rows.length === 0) {
     const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 10);
-    await db.execute("INSERT INTO users (email, password, role, verified) VALUES (?, ?, 'admin', 1)", [adminEmail, hash]);
+    await db.execute("INSERT INTO users (username, email, password, role, verified) VALUES (?, ?, ?, 'admin', 1)", [adminUsername, adminEmail, hash]);
     console.log('Admin user seeded');
   }
 
