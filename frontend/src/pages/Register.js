@@ -35,8 +35,6 @@ export default function Register() {
 
   const L = (key, fallback) => labels[key] || fallback;
 
-  const identifier = email || phone;
-
   const handleRegister = async e => {
     e.preventDefault();
     setError('');
@@ -50,7 +48,7 @@ export default function Register() {
         setInfo(data.dev_code ? `Dev mode — code: ${data.dev_code}` : 'Verification code sent!');
         setStep(2);
       } else {
-        login(data.token, data.role, identifier);
+        login(data.token, data.role, username);
         navigate('/');
       }
     } catch (err) {
@@ -62,18 +60,25 @@ export default function Register() {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
-      const { data } = await api.post('/api/auth/verify', { identifier, code });
-      login(data.token, data.role, identifier);
+      const { data } = await api.post('/api/auth/verify', { username, code });
+      login(data.token, data.role, username);
       navigate('/');
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid code');
     } finally { setLoading(false); }
   };
 
-  const resend = async () => {
+  const [resendVia, setResendVia] = useState(null); // null, 'ask', 'email', 'sms'
+
+  const resend = async (via) => {
     try {
-      const { data } = await api.post('/api/auth/resend', { identifier });
-      setInfo(data.dev_code ? `Dev mode — new code: ${data.dev_code}` : 'Code resent!');
+      const { data } = await api.post('/api/auth/resend', { username, via });
+      if (data.askPreference) {
+        setResendVia('ask');
+        return;
+      }
+      setResendVia(null);
+      setInfo(data.dev_code ? `Dev mode — new code: ${data.dev_code}` : `Code resent via ${data.sentVia}`);
     } catch { setError('Failed to resend'); }
   };
 
@@ -125,7 +130,7 @@ export default function Register() {
         ) : (
           <form onSubmit={verify}>
             <p style={{ marginBottom: 16, color: '#555', fontSize: 14 }}>
-              {L('verify_title', 'Enter the 5-digit code sent to')} <strong>{identifier}</strong>
+              {L('verify_title', 'Enter the 5-digit code sent to')} <strong>{username}</strong>
             </p>
             <div className="form-group">
               <input value={code} onChange={e => setCode(e.target.value)} placeholder="12345" maxLength={5}
@@ -134,9 +139,16 @@ export default function Register() {
             <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
               {loading ? '...' : L('verify_button', 'Verify & Create Account')}
             </button>
-            <button type="button" className="btn btn-secondary" style={{ width: '100%', marginTop: 8 }} onClick={resend}>
-              {L('verify_resend', 'Resend Code')}
-            </button>
+            {resendVia === 'ask' ? (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => resend('email')}>Email</button>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => resend('sms')}>SMS</button>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-secondary" style={{ width: '100%', marginTop: 8 }} onClick={() => resend()}>
+                {L('verify_resend', 'Resend Code')}
+              </button>
+            )}
           </form>
         )}
 

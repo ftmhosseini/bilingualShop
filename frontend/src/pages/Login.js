@@ -49,8 +49,8 @@ export default function Login() {
     e.preventDefault();
     setError(''); setInfo(''); setLoading(true);
     try {
-      const { data } = await api.post('/api/auth/forgot-password', { identifier: resetId });
-      setInfo(data.dev_code ? `Dev mode — code: ${data.dev_code}` : 'Reset code sent! Check your email.');
+      const { data } = await api.post('/api/auth/forgot-password', { username: resetId });
+      setInfo(data.dev_code ? `Dev mode — code: ${data.dev_code}` : 'Reset code sent! Check your email/phone.');
       setForgot(2);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to send code');
@@ -61,7 +61,7 @@ export default function Login() {
     e.preventDefault();
     setError(''); setInfo(''); setLoading(true);
     try {
-      await api.post('/api/auth/reset-password', { identifier: resetId, code, password: newPass });
+      await api.post('/api/auth/reset-password', { username: resetId, code, password: newPass });
       setInfo('Password reset! You can now login.');
       setForgot(0);
       setPassword('');
@@ -79,8 +79,8 @@ export default function Login() {
           {info && <p style={{ color: 'green', marginBottom: 12 }}>{info}</p>}
           <form onSubmit={sendResetCode}>
             <div className="form-group">
-              <label>{L('login_identifier', 'Email or Phone')}</label>
-              <input value={resetId} onChange={e => setResetId(e.target.value)} placeholder={L('login_identifier_placeholder', 'email@example.com or +1234567890')} required />
+              <label>{L('forgot_username', 'Username')}</label>
+              <input value={resetId} onChange={e => setResetId(e.target.value)} placeholder="Username" required />
             </div>
             <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
               {loading ? '...' : L('forgot_button', 'Send Reset Code')}

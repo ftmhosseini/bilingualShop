@@ -72,10 +72,9 @@ router.post('/register', async (req, res) => {
 
 // Step 2: Verify code
 router.post('/verify', async (req, res) => {
-  const { identifier, code } = req.body;
+  const { username, code } = req.body;
   const db = await getPool();
-  const field = identifier.includes('@') ? 'email' : 'phone';
-  const [rows] = await db.execute(`SELECT * FROM users WHERE ${field} = ?`, [identifier]);
+  const [rows] = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
   const user = rows[0];
   if (!user) return res.status(404).json({ error: 'User not found' });
   if (user.verify_code !== code) return res.status(400).json({ error: 'Invalid code' });
@@ -88,58 +87,75 @@ router.post('/verify', async (req, res) => {
 
 // Resend code
 router.post('/resend', async (req, res) => {
-  const { identifier } = req.body;
-  const isEmail = identifier.includes('@');
-  const field = isEmail ? 'email' : 'phone';
+  const { username, via } = req.body; // via = 'email' or 'sms' (optional)
   const db = await getPool();
-  const [rows] = await db.execute(`SELECT id FROM users WHERE ${field} = ?`, [identifier]);
+  const [rows] = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
   if (!rows[0]) return res.status(404).json({ error: 'User not found' });
 
+  const user = rows[0];
   const code = generateCode();
   const expires = new Date(Date.now() + 10 * 60 * 1000);
-  await db.execute('UPDATE users SET verify_code=?, verify_expires=? WHERE id=?', [code, expires, rows[0].id]);
+  await db.execute('UPDATE users SET verify_code=?, verify_expires=? WHERE id=?', [code, expires, user.id]);
 
-  if (isEmail) await sendVerificationEmail(identifier, code);
-  if (!isEmail) await sendVerificationSMS(identifier, code);
-  res.json({ message: 'Code resent' });
+  // If user has both and no preference specified, ask them
+  if (user.email && user.phone && !via) {
+    return res.json({ message: 'Choose method', askPreference: true });
+  }
+
+  const sendEmail = via === 'email' || (!via && user.email);
+  const sendSms = via === 'sms' || (!via && !user.email && user.phone);
+
+  if (sendEmail && user.email) {
+    try { await sendVerificationEmail(user.email, code); } catch (err) {
+      return res.status(500).json({ error: 'Failed to send email' });
+    }
+    return res.json({ message: 'Code resent via email', sentVia: 'email' });
+  }
+  if (sendSms && user.phone) {
+    try { await sendVerificationSMS(user.phone, code); } catch (err) {
+      return res.status(500).json({ error: 'Failed to send SMS' });
+    }
+    return res.json({ message: 'Code resent via SMS', sentVia: 'sms' });
+  }
+  res.status(400).json({ error: 'No contact method available' });
 });
 
 // Forgot password — send reset code
 router.post('/forgot-password', async (req, res) => {
-  const { identifier } = req.body;
-  if (!identifier) return res.status(400).json({ error: 'Email or phone required' });
-  const isEmail = identifier.includes('@');
-  const field = isEmail ? 'email' : 'phone';
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'Username required' });
   const db = await getPool();
-  const [rows] = await db.execute(`SELECT id FROM users WHERE ${field} = ?`, [identifier]);
+  const [rows] = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
   if (!rows[0]) return res.status(404).json({ error: 'User not found' });
 
+  const user = rows[0];
   const code = generateCode();
   const expires = new Date(Date.now() + 10 * 60 * 1000);
-  await db.execute('UPDATE users SET verify_code=?, verify_expires=? WHERE id=?', [code, expires, rows[0].id]);
+  await db.execute('UPDATE users SET verify_code=?, verify_expires=? WHERE id=?', [code, expires, user.id]);
 
-  if (isEmail) {
-    try { await sendVerificationEmail(identifier, code); } catch (err) {
+  if (user.email) {
+    try { await sendVerificationEmail(user.email, code); } catch (err) {
       console.error('Email error:', err.message);
       return res.status(500).json({ error: 'Failed to send email' });
     }
+    return res.json({ message: 'Reset code sent', sentVia: 'email' });
   }
-  if (!isEmail) {
-    try { await sendVerificationSMS(identifier, code); } catch (err) {
+  if (user.phone) {
+    try { await sendVerificationSMS(user.phone, code); } catch (err) {
       console.error('SMS error:', err.message);
       return res.status(500).json({ error: 'Failed to send SMS' });
     }
+    return res.json({ message: 'Reset code sent', sentVia: 'sms' });
   }
-  res.json({ message: 'Reset code sent' });
+  res.status(400).json({ error: 'No email or phone on file' });
 });
 
 // Reset password — verify code and set new password
 router.post('/reset-password', async (req, res) => {
-  const { identifier, code, password } = req.body;
-  if (!identifier || !code || !password) return res.status(400).json({ error: 'All fields required' });
-  const field = identifier.includes('@') ? 'email' : 'phone';
+  const { username, code, password } = req.body;
+  if (!username || !code || !password) return res.status(400).json({ error: 'All fields required' });
   const db = await getPool();
-  const [rows] = await db.execute(`SELECT * FROM users WHERE ${field} = ?`, [identifier]);
+  const [rows] = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
   const user = rows[0];
   if (!user) return res.status(404).json({ error: 'User not found' });
   if (user.verify_code !== code) return res.status(400).json({ error: 'Invalid code' });
