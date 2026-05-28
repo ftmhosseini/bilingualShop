@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="100" fill="#131921"/>
+  
+  <!-- Milk bottle shape -->
+  <path d="M75 60 L75 50 Q75 40 85 40 L115 40 Q125 40 125 50 L125 60 Q140 70 140 90 L140 155 Q140 165 130 165 L70 165 Q60 165 60 155 L60 90 Q60 70 75 60Z" fill="#f3edd7"/>
+  
+  <!-- Milk fill -->
+  <path d="M65 115 L65 155 Q65 162 72 162 L128 162 Q135 162 135 155 L135 115Z" fill="white"/>
+  
+  <!-- Nut on top -->
+  <ellipse cx="100" cy="38" rx="18" ry="12" fill="#d4af37"/>
+  <ellipse cx="100" cy="36" rx="14" ry="9" fill="#c49a2a"/>
+  <!-- Nut texture lines -->
+  <path d="M88 36 Q100 30 112 36" stroke="#a07820" stroke-width="1.5" fill="none"/>
+  <path d="M86 39 Q100 33 114 39" stroke="#a07820" stroke-width="1.5" fill="none"/>
+  
+  <!-- NM letters on bottle -->
+  <text x="100" y="148" font-family="Arial" font-weight="bold" font-size="28" fill="#131921" text-anchor="middle">NM</text>
+  
+  <!-- Shine on bottle -->
+  <ellipse cx="82" cy="95" rx="6" ry="18" fill="rgba(255,255,255,0.3)" transform="rotate(-15 82 95)"/>
+</svg>

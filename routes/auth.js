@@ -1,0 +1,263 @@
+const router = require('express').Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { getPool } = require('../db');
+const { sendVerificationEmail } = require('../mailer');
+const { sendVerificationSMS } = require('../sms');
+
+function generateCode() {
+  return String(Math.floor(10000 + Math.random() * 90000));
+}
+
+// Step 1: Register — send verification code
+router.post('/register', async (req, res) => {
+  const { identifier, password } = req.body; // identifier = email or phone
+  if (!identifier || !password) return res.status(400).json({ error: 'identifier and password required' });
+
+  const isEmail = identifier.includes('@');
+  const db = await getPool();
+
+  // Check duplicate
+  const field = isEmail ? 'email' : 'phone';
+  const [existing] = await db.execute(`SELECT id FROM users WHERE ${field} = ?`, [identifier]);
+  if (existing.length > 0) return res.status(409).json({ error: `${field} already in use` });
+
+  const hash = await bcrypt.hash(password, 10);
+  const code = generateCode();
+  const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+
+  // Upsert unverified user
+  await db.execute(
+    `INSERT INTO users (${field}, password, role, verified, verify_code, verify_expires) VALUES (?,?,?,?,?,?)
+     ON DUPLICATE KEY UPDATE password=?, verify_code=?, verify_expires=?, verified=0`,
+    [identifier, hash, 'customer', 0, code, expires, hash, code, expires]
+  );
+
+  if (isEmail) {
+    try {
+      await sendVerificationEmail(identifier, code);
+    } catch (err) {
+      console.error('Email error:', err.message);
+      return res.status(500).json({ error: 'Failed to send email' });
+    }
+  }
+  // Phone: send SMS via Kavenegar
+  if (!isEmail) {
+    try {
+      await sendVerificationSMS(identifier, code);
+    } catch (err) {
+      console.error('SMS error:', err.message);
+      return res.status(500).json({ error: 'Failed to send SMS' });
+    }
+  }
+
+  res.json({ message: 'Verification code sent', isEmail });
+});
+
+// Step 2: Verify code
+router.post('/verify', async (req, res) => {
+  const { identifier, code } = req.body;
+  const db = await getPool();
+  const field = identifier.includes('@') ? 'email' : 'phone';
+  const [rows] = await db.execute(`SELECT * FROM users WHERE ${field} = ?`, [identifier]);
+  const user = rows[0];
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.verify_code !== code) return res.status(400).json({ error: 'Invalid code' });
+  if (new Date(user.verify_expires) < new Date()) return res.status(400).json({ error: 'Code expired' });
+
+  await db.execute('UPDATE users SET verified=1, verify_code=NULL, verify_expires=NULL WHERE id=?', [user.id]);
+  const token = jwt.sign({ id: user.id, email: user.email, phone: user.phone, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  res.json({ token, role: user.role });
+});
+
+// Resend code
+router.post('/resend', async (req, res) => {
+  const { identifier } = req.body;
+  const isEmail = identifier.includes('@');
+  const field = isEmail ? 'email' : 'phone';
+  const db = await getPool();
+  const [rows] = await db.execute(`SELECT id FROM users WHERE ${field} = ?`, [identifier]);
+  if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+
+  const code = generateCode();
+  const expires = new Date(Date.now() + 10 * 60 * 1000);
+  await db.execute('UPDATE users SET verify_code=?, verify_expires=? WHERE id=?', [code, expires, rows[0].id]);
+
+  if (isEmail) await sendVerificationEmail(identifier, code);
+  if (!isEmail) await sendVerificationSMS(identifier, code);
+  res.json({ message: 'Code resent' });
+});
+
+// Forgot password — send reset code
+router.post('/forgot-password', async (req, res) => {
+  const { identifier } = req.body;
+  if (!identifier) return res.status(400).json({ error: 'Email or phone required' });
+  const isEmail = identifier.includes('@');
+  const field = isEmail ? 'email' : 'phone';
+  const db = await getPool();
+  const [rows] = await db.execute(`SELECT id FROM users WHERE ${field} = ?`, [identifier]);
+  if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+
+  const code = generateCode();
+  const expires = new Date(Date.now() + 10 * 60 * 1000);
+  await db.execute('UPDATE users SET verify_code=?, verify_expires=? WHERE id=?', [code, expires, rows[0].id]);
+
+  if (isEmail) {
+    try { await sendVerificationEmail(identifier, code); } catch (err) {
+      console.error('Email error:', err.message);
+      return res.status(500).json({ error: 'Failed to send email' });
+    }
+  }
+  if (!isEmail) {
+    try { await sendVerificationSMS(identifier, code); } catch (err) {
+      console.error('SMS error:', err.message);
+      return res.status(500).json({ error: 'Failed to send SMS' });
+    }
+  }
+  res.json({ message: 'Reset code sent' });
+});
+
+// Reset password — verify code and set new password
+router.post('/reset-password', async (req, res) => {
+  const { identifier, code, password } = req.body;
+  if (!identifier || !code || !password) return res.status(400).json({ error: 'All fields required' });
+  const field = identifier.includes('@') ? 'email' : 'phone';
+  const db = await getPool();
+  const [rows] = await db.execute(`SELECT * FROM users WHERE ${field} = ?`, [identifier]);
+  const user = rows[0];
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.verify_code !== code) return res.status(400).json({ error: 'Invalid code' });
+  if (new Date(user.verify_expires) < new Date()) return res.status(400).json({ error: 'Code expired' });
+
+  const hash = await bcrypt.hash(password, 10);
+  await db.execute('UPDATE users SET password=?, verify_code=NULL, verify_expires=NULL WHERE id=?', [hash, user.id]);
+  res.json({ message: 'Password reset successfully' });
+});
+
+// Login
+router.post('/login', async (req, res) => {
+  const { identifier, password } = req.body;
+  const field = identifier?.includes('@') ? 'email' : 'phone';
+  try {
+    const db = await getPool();
+    const [rows] = await db.execute(`SELECT * FROM users WHERE ${field} = ?`, [identifier]);
+    const user = rows[0];
+    if (!user || !(await bcrypt.compare(password, user.password)))
+      return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user.verified) return res.status(403).json({ error: 'Account not verified', needsVerification: true });
+    const token = jwt.sign({ id: user.id, email: user.email, phone: user.phone, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, role: user.role });
+  } catch {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET profile
+router.get('/profile', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { id } = jwt.verify(token, process.env.JWT_SECRET);
+    const db = await getPool();
+    const [rows] = await db.execute('SELECT id, email, phone, role, first_name, last_name FROM users WHERE id=?', [id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch { res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// PUT update profile
+router.put('/profile', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { id } = jwt.verify(token, process.env.JWT_SECRET);
+    const { email, phone, first_name, last_name, current_password, new_password } = req.body;
+    const db = await getPool();
+    const [rows] = await db.execute('SELECT * FROM users WHERE id=?', [id]);
+    const user = rows[0];
+    if (!user) return res.status(404).json({ error: 'Not found' });
+    if (new_password) {
+      if (!current_password || !(await bcrypt.compare(current_password, user.password)))
+        return res.status(400).json({ error: 'Current password is incorrect' });
+      const hash = await bcrypt.hash(new_password, 10);
+      await db.execute('UPDATE users SET password=? WHERE id=?', [hash, id]);
+    }
+    if (email) await db.execute('UPDATE users SET email=? WHERE id=?', [email, id]);
+    if (phone !== undefined) await db.execute('UPDATE users SET phone=? WHERE id=?', [phone || null, id]);
+    await db.execute('UPDATE users SET first_name=?, last_name=? WHERE id=?', [first_name || null, last_name || null, id]);
+    res.json({ success: true });
+  } catch { res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// GET addresses
+router.get('/addresses', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { id } = jwt.verify(token, process.env.JWT_SECRET);
+    const db = await getPool();
+    const [rows] = await db.execute('SELECT * FROM user_addresses WHERE user_id=? ORDER BY is_default DESC, id ASC', [id]);
+    res.json(rows);
+  } catch { res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// POST add address
+router.post('/addresses', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { id } = jwt.verify(token, process.env.JWT_SECRET);
+    const { label, name, address, city, province, country, postal, phone, is_default } = req.body;
+    const db = await getPool();
+    if (is_default) await db.execute('UPDATE user_addresses SET is_default=0 WHERE user_id=?', [id]);
+    const [r] = await db.execute(
+      'INSERT INTO user_addresses (user_id, label, name, address, city, province, country, postal, phone, is_default) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [id, label||'', name||'', address||'', city||'', province||'', country||'', postal||'', phone||'', is_default?1:0]
+    );
+    res.json({ id: r.insertId });
+  } catch { res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// PUT update address
+router.put('/addresses/:addrId', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { id } = jwt.verify(token, process.env.JWT_SECRET);
+    const { label, name, address, city, province, country, postal, phone, is_default } = req.body;
+    const db = await getPool();
+    if (is_default) await db.execute('UPDATE user_addresses SET is_default=0 WHERE user_id=?', [id]);
+    await db.execute(
+      'UPDATE user_addresses SET label=?, name=?, address=?, city=?, province=?, country=?, postal=?, phone=?, is_default=? WHERE id=? AND user_id=?',
+      [label||'', name||'', address||'', city||'', province||'', country||'', postal||'', phone||'', is_default?1:0, req.params.addrId, id]
+    );
+    res.json({ success: true });
+  } catch { res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// DELETE address
+router.delete('/addresses/:addrId', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { id } = jwt.verify(token, process.env.JWT_SECRET);
+    const db = await getPool();
+    await db.execute('DELETE FROM user_addresses WHERE id=? AND user_id=?', [req.params.addrId, id]);
+    res.json({ success: true });
+  } catch { res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// SET default address
+router.put('/addresses/:addrId/default', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { id } = jwt.verify(token, process.env.JWT_SECRET);
+    const db = await getPool();
+    await db.execute('UPDATE user_addresses SET is_default=0 WHERE user_id=?', [id]);
+    await db.execute('UPDATE user_addresses SET is_default=1 WHERE id=? AND user_id=?', [req.params.addrId, id]);
+    res.json({ success: true });
+  } catch { res.status(401).json({ error: 'Invalid token' }); }
+});
+
+module.exports = router;
