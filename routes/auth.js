@@ -179,8 +179,9 @@ router.post('/login', async (req, res) => {
     if (!user.verified) return res.status(403).json({ error: 'Account not verified', needsVerification: true });
     const token = jwt.sign({ id: user.id, email: user.email, phone: user.phone, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, role: user.role });
-  } catch {
-    res.status(500).json({ error: 'Server error' });
+  } catch (err) {
+    console.error('LOGIN ERROR:', err.message, err.stack);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
