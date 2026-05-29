@@ -79,9 +79,8 @@ function AboutTab({ settings, set, save, saved }) {
 
   useEffect(() => {
     api.get('/api/languages').then(r => {
-      const l = r.data.filter(l => l.enabled);
-      setLangs(l);
-      if (l[0]) setPreviewLang(l[0].code);
+      setLangs(r.data);
+      if (r.data[0]) setPreviewLang(r.data[0].code);
     });
   }, []);
 
@@ -309,7 +308,7 @@ function ContactTab({ settings, set, save, saved }) {
   const [editing, setEditing] = useState(null); // 'intro' | 'title' | 'email' | 'phone' | 'address' | 'hours' | 'getInTouch' | 'sendMsg'
 
   useEffect(() => {
-    api.get('/api/languages').then(r => { const l = r.data.filter(l => l.enabled); setLangs(l); if (l[0]) setPreviewLang(l[0].code); });
+    api.get('/api/languages').then(r => { const l = r.data; setLangs(l); if (l[0]) setPreviewLang(l[0].code); });
     api.get('/api/currencies').then(r => setCurrencies(r.data));
   }, []);
   useEffect(() => {
@@ -510,7 +509,7 @@ function SlidesTab({ settings, set, save, saved }) {
   const [uploading, setUploading] = useState(null);
   const [previewIdx, setPreviewIdx] = useState(0);
   const base = process.env.REACT_APP_API_URL || '';
-  useEffect(() => { api.get('/api/languages').then(r => setAvailLangs(r.data.filter(l => l.enabled))); }, []);
+  useEffect(() => { api.get('/api/languages').then(r => setAvailLangs(r.data)); }, []);
   const slides = (() => { try { return JSON.parse(settings.hero_slides || '[]'); } catch { return []; } })();
   const setSlides = v => set('hero_slides', JSON.stringify(v));
 
@@ -686,7 +685,7 @@ function SlidesTab({ settings, set, save, saved }) {
 
 function FAQTab({ settings, set, save, saved }) {
   const [langs, setLangs] = useState([]);
-  useEffect(() => { api.get('/api/languages').then(r => setLangs(r.data.filter(l => l.enabled))); }, []);
+  useEffect(() => { api.get('/api/languages').then(r => setLangs(r.data)); }, []);
 
   return (
     <div style={{ width: '100%' }}>
@@ -1037,9 +1036,9 @@ function NavBarTab({ settings, save: saveSetting }) {
 
   useEffect(() => {
     api.get('/api/languages').then(r => {
-      const enabled = r.data.filter(l => l.enabled);
-      setLangs(enabled);
-      if (enabled.length) setActiveLang(enabled[0].code);
+      const all = r.data;
+      setLangs(all);
+      if (all.length) setActiveLang(all[0].code);
     });
     api.get('/api/settings').then(r => setShowLocation(r.data.show_location !== '0'));
   }, []);
@@ -1484,9 +1483,9 @@ function TranslationsTab() {
 
   useEffect(() => {
     api.get('/api/languages').then(r => {
-      const enabled = r.data.filter(l => l.enabled);
-      setLangs(enabled);
-      if (enabled[0]) setSelectedLang(enabled[0].code);
+      const all = r.data;
+      setLangs(all);
+      if (all[0]) setSelectedLang(all[0].code);
     });
   }, []);
 
@@ -1588,9 +1587,9 @@ function AuthPagesTab({ settings, save, saved }) {
 
   useEffect(() => {
     api.get('/api/languages').then(r => {
-      const enabled = r.data.filter(l => l.enabled);
-      setLangs(enabled);
-      if (enabled[0]) setActiveLang(enabled[0].code);
+      const all = r.data;
+      setLangs(all);
+      if (all[0]) setActiveLang(all[0].code);
     });
   }, []);
 

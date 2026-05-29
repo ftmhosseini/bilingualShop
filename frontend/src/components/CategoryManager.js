@@ -108,7 +108,7 @@ export default function CategoryManager({ categories, onRefresh }) {
 
   useEffect(() => {
     api.get('/api/languages').then(r => {
-      if (r.data.length) setLangs(r.data.filter(l => l.enabled));
+      if (r.data.length) setLangs(r.data);
     }).catch(() => {});
   }, []);
 

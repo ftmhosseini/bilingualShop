@@ -30,7 +30,7 @@ export default function LanguageSettings() {
 
   const addLanguage = async () => {
     if (!newLang.code.trim() || !newLang.label.trim()) return;
-    const updated = [...languages, { ...newLang, enabled: true, sort_order: languages.length + 1 }];
+    const updated = [...languages, { ...newLang, enabled: false, sort_order: languages.length + 1 }];
     await api.put('/api/languages', updated);
     setLanguages(updated);
     setNewLang({ code: '', label: '', flag: '', rtl: false });
@@ -48,13 +48,14 @@ export default function LanguageSettings() {
       <h2 style={{ marginBottom: 20 }}>{t('selectLanguage')} Settings</h2>
       <div className="card" style={{ maxWidth: 460 }}>
         <p style={{ marginBottom: 16, color: '#666', fontSize: 14 }}>
-          Choose which languages are available on the storefront.
+          New languages start disabled. Add your content and translations first, then enable to show on the storefront.
         </p>
         {languages.map((lang, i) => (
-          <div key={lang.code} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid #eee' }}>
-            <input type="checkbox" checked={!!lang.enabled} onChange={() => toggle(i)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+          <div key={lang.code} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid #eee', opacity: lang.enabled ? 1 : 0.6 }}>
+            <input type="checkbox" checked={!!lang.enabled} onChange={() => toggle(i)} style={{ width: 18, height: 18, cursor: 'pointer' }} title={lang.enabled ? 'Visible on storefront' : 'Hidden from storefront'} />
             <span style={{ fontSize: 22 }}>{lang.flag}</span>
             <span style={{ fontSize: 15, flex: 1 }}>{lang.label}</span>
+            <span style={{ fontSize: 11, color: lang.enabled ? '#27ae60' : '#e67e22', fontWeight: 500 }}>{lang.enabled ? '● Live' : '● Draft'}</span>
             <span style={{ fontSize: 12, color: '#888', fontFamily: 'monospace' }}>{lang.code}</span>
             {lang.rtl ? <span style={{ fontSize: 11, color: '#888' }}>RTL</span> : null}
             {!['en','fa','ar'].includes(lang.code) && (
