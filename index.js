@@ -30,29 +30,29 @@
 const fs = require('fs');
 const path = require('path');
 
-// If .env doesn't exist, run the installer instead
-if (!fs.existsSync(path.join(__dirname, '.env'))) {
- require('./install');
- return;
+// If .env doesn't exist AND no DB_HOST env var set, run the installer instead
+if (!fs.existsSync(path.join(__dirname, '.env')) && !process.env.DB_HOST) {
+  require('./install');
+  return;
 }
 
 const app = require('./app');
 const { initDB, getPool } = require('./db');
 
 // Wait for database to be ready
-async function waitForDB(maxRetries = 30) {
+async function waitForDB(maxRetries = 60) {
  for (let i = 0; i < maxRetries; i++) {
    try {
      const pool = await getPool();
      await pool.execute('SELECT 1');
-     console.log('✓ Database connected');
+     console.log('✓ Database connected successfully');
      return;
    } catch (err) {
-     console.log(`⏳ Attempt ${i + 1}/${maxRetries}: Waiting for database...`);
+     console.log(`⏳ Attempt ${i + 1}/${maxRetries}: Waiting for database... (${err.code})`);
      await new Promise(r => setTimeout(r, 2000)); // wait 2 seconds
    }
  }
- throw new Error('Could not connect to database after 30 retries');
+ throw new Error('Could not connect to database after 60 retries');
 }
 
 // Serve frontend build for any non-API route (production/cPanel only)
