@@ -12,6 +12,7 @@ if (!fs.existsSync(envPath) && !process.env.DB_HOST) {
   const { initDB, getPool } = require('./db');
 
   async function waitForDB(maxRetries = 30) {
+    console.log(`DB config: host=${process.env.DB_HOST}, port=${process.env.DB_PORT}, user=${process.env.DB_USER}, db=${process.env.DB_NAME}`);
     for (let i = 0; i < maxRetries; i++) {
       try {
         const pool = await getPool();
