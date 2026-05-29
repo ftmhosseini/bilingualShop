@@ -55,23 +55,18 @@ button:hover{background:#219a52}button:disabled{background:#ccc;cursor:not-allow
 <input name="logo" type="file" accept="image/*" onchange="var r=new FileReader();r.onload=function(e){var p=document.getElementById('lp');p.src=e.target.result;p.style.display='block'};r.readAsDataURL(this.files[0])">
 <img id="lp" class="logo-preview">
 
-<h3>Language & Currency</h3>
+<h3>Language</h3>
 <div class="row">
 <div><label>Language Code</label><input name="lang_code" placeholder="en" required maxlength="10"></div>
 <div><label>Language Name</label><input name="lang_label" placeholder="English" required></div>
 </div>
 <div class="row">
 <div><label>Direction</label><select name="lang_dir"><option value="ltr">LTR (Left to Right)</option><option value="rtl">RTL (Right to Left)</option></select></div>
-<div><label>Flag Emoji</label><input name="lang_flag" placeholder="🇺🇸" maxlength="4"></div>
 </div>
-<div class="row">
-<div><label>Currency Code</label><input name="currency_code" placeholder="USD" required maxlength="10"></div>
-<div><label>Currency Symbol</label><input name="currency_symbol" placeholder="$" required maxlength="10"></div>
-</div>
-<label>Country</label><input name="currency_country" placeholder="United States" required>
 
 <h3>Admin Account</h3>
-<label>Admin Email</label><input name="admin_email" type="email" required>
+<label>Admin Username</label><input name="admin_username" placeholder="admin" required>
+<label>Admin Email <span class="opt">(optional)</span></label><input name="admin_email" type="email">
 <label>Admin Password</label><input name="admin_pass" type="password" minlength="6" required>
 
 <button type="submit">Install</button>
@@ -137,15 +132,13 @@ const server = http.createServer(function(req, res) {
         const lang_label = fields.lang_label;
         const lang_dir = fields.lang_dir;
         const lang_flag = fields.lang_flag || '';
-        const currency_code = fields.currency_code;
-        const currency_symbol = fields.currency_symbol;
-        const currency_country = fields.currency_country;
-        const admin_email = fields.admin_email;
+        const admin_email = fields.admin_email || '';
+        const admin_username = fields.admin_username;
         const admin_pass = fields.admin_pass;
 
-        if (!db_name || !db_user || !site_name || !lang_code || !lang_label || !currency_code || !currency_symbol || !admin_email || !admin_pass) {
+        if (!db_name || !db_user || !site_name || !lang_code || !lang_label || !admin_username || !admin_pass) {
           res.writeHead(400);
-          return res.end(JSON.stringify({ error: 'All fields except logo are required' }));
+          return res.end(JSON.stringify({ error: 'All fields except logo and email are required' }));
         }
 
         // Test MySQL connection
@@ -172,6 +165,7 @@ const server = http.createServer(function(req, res) {
           + 'DB_PASSWORD=' + db_pass + '\n'
           + 'DB_NAME=' + db_name + '\n'
           + 'JWT_SECRET=' + jwtSecret + '\n'
+          + 'ADMIN_USERNAME=' + admin_username + '\n'
           + 'ADMIN_EMAIL=' + admin_email + '\n'
           + 'ADMIN_PASSWORD=' + admin_pass + '\n';
 
@@ -184,6 +178,7 @@ const server = http.createServer(function(req, res) {
         process.env.DB_PASSWORD = db_pass;
         process.env.DB_NAME = db_name;
         process.env.JWT_SECRET = jwtSecret;
+        process.env.ADMIN_USERNAME = admin_username;
         process.env.ADMIN_EMAIL = admin_email;
         process.env.ADMIN_PASSWORD = admin_pass;
 
@@ -210,12 +205,6 @@ const server = http.createServer(function(req, res) {
         await db.execute(
           "INSERT INTO languages (code, label, flag, rtl, enabled, sort_order) VALUES (?,?,?,?,1,0) ON DUPLICATE KEY UPDATE label=VALUES(label), flag=VALUES(flag), rtl=VALUES(rtl), enabled=1",
           [lang_code, lang_label, lang_flag, lang_dir === 'rtl' ? 1 : 0]
-        );
-
-        // Insert currency
-        await db.execute(
-          "INSERT INTO currencies (language_code, country, flag, currency_code, symbol, active) VALUES (?,?,?,?,?,1)",
-          [lang_code, currency_country, lang_flag, currency_code, currency_symbol]
         );
 
         res.writeHead(200);

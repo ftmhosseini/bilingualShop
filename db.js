@@ -212,11 +212,13 @@ async function initDB() {
       currency_code VARCHAR(10),
       symbol VARCHAR(10),
       active TINYINT DEFAULT 1,
-      fraction_digits TINYINT DEFAULT 2
+      fraction_digits TINYINT DEFAULT 2,
+      sort_order INT DEFAULT 0
     )
   `);
-  // add fraction_digits to existing installs (ignore error if column already exists)
+  // add columns to existing installs (ignore error if column already exists)
   await db.execute(`ALTER TABLE currencies ADD COLUMN fraction_digits TINYINT DEFAULT 2`).catch(() => {});
+  await db.execute(`ALTER TABLE currencies ADD COLUMN sort_order INT DEFAULT 0`).catch(() => {});
 
   // nav_links table
   await db.execute(`

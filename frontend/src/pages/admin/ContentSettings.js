@@ -528,13 +528,14 @@ function SlidesTab({ settings, set, save, saved }) {
     fd.append('image', file);
     const r = await api.post('/api/settings/upload-image', fd);
     const isVideo = file.type.startsWith('video/');
+    const s = [...slides];
     if (isVideo) {
-      update(i, 'video', r.data.url);
-      update(i, 'mediaType', 'video');
+      s[i] = { ...s[i], video: r.data.url, mediaType: 'video' };
     } else {
-      update(i, 'image', r.data.url);
-      update(i, 'mediaType', 'image');
+      s[i] = { ...s[i], image: r.data.url, mediaType: 'image' };
     }
+    setSlides(s);
+    save('hero_slides', s);
     setUploading(null);
   };
 
