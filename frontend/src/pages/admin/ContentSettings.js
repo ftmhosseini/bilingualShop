@@ -1215,8 +1215,6 @@ function LanguagesTab({ settings, set, save }) {
   const [langs, setLangs] = useState([]);
   const [saved, setSaved] = useState(false);
 
-  const pages = ['title', 'home', 'products', 'faq', 'about', 'contact', 'orders', 'profile'];
-
   useEffect(() => {
     api.get('/api/languages').then(r => setLangs(r.data));
   }, []);
@@ -1225,14 +1223,8 @@ function LanguagesTab({ settings, set, save }) {
 
   const toggleActive = (i) => {
     const l = langs[i];
-    if (l.enabled) { update(i, 'enabled', false); return; }
-    const titles = (() => { try { return JSON.parse(settings.page_titles || '{}'); } catch { return {}; } })();
-    const missing = pages.filter(p => !titles[p]?.[l.code]?.trim());
-    if (missing.length > 0) {
-      alert(`Cannot activate "${l.label || l.code}": fill Page Titles (${missing.join(', ')}) first.`);
-      return;
-    }
-    update(i, 'enabled', true);
+    if (l.enabled && langs.filter(x => x.enabled).length <= 1) return;
+    update(i, 'enabled', !l.enabled);
   };
 
   const add = () => setLangs(prev => [...prev, { code: '', label: '', enabled: false, sort_order: prev.length + 1 }]);
