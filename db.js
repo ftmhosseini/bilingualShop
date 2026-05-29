@@ -294,6 +294,13 @@ async function initDB() {
     console.log('Admin user seeded');
   }
 
+  // Seed default language if none exist
+  const [langs] = await db.execute('SELECT code FROM languages LIMIT 1');
+  if (langs.length === 0) {
+    await db.execute("INSERT INTO languages (code, label, flag, rtl, enabled, sort_order) VALUES ('en', 'English', '', 0, 1, 0)");
+    console.log('Default language (English) seeded');
+  }
+
   return db;
 }
 
