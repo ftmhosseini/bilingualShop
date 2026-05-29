@@ -5,21 +5,32 @@ const bcrypt = require('bcryptjs');
 let pool;
 
 async function getPool() {
-  if (pool) return pool;
-  if (process.env.DATABASE_URL) {
-    pool = mysql.createPool(process.env.DATABASE_URL);
-  } else {
-    pool = mysql.createPool({
-      host: process.env.DB_HOST || process.env.MYSQL_HOST || 'localhost',
-      port: process.env.DB_PORT || process.env.MYSQL_PORT || 3306,
-      user: process.env.DB_USER || process.env.MYSQL_USER || 'root',
-      password: process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || '',
-      database: process.env.DB_NAME || process.env.MYSQL_DATABASE || 'nuttymilk',
-      waitForConnections: true,
-    });
-  }
-  return pool;
+ if (pool) return pool;
+ 
+ // Prefer individual env vars over DATABASE_URL
+ const host = process.env.DB_HOST || process.env.MYSQL_HOST || 'localhost';
+ const port = process.env.DB_PORT || process.env.MYSQL_PORT || 3306;
+ const user = process.env.DB_USER || process.env.MYSQL_USER || 'root';
+ const password = process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || '';
+ const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || 'nuttymilk';
+ 
+ // Only use DATABASE_URL if individual vars are not set
+ if (!process.env.DB_HOST && !process.env.MYSQL_HOST && process.env.DATABASE_URL) {
+   pool = mysql.createPool(process.env.DATABASE_URL);
+ } else {
+   pool = mysql.createPool({
+     host,
+     port,
+     user,
+     password,
+     database,
+     waitForConnections: true,
+   });
+ }
+ 
+ return pool;
 }
+
 
 async function initDB() {
   const db = await getPool();
