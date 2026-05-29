@@ -200,10 +200,8 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS languages (
       code VARCHAR(10) PRIMARY KEY,
       label VARCHAR(50),
-      flag VARCHAR(10),
       rtl TINYINT DEFAULT 0,
-      enabled TINYINT DEFAULT 1,
-      sort_order INT DEFAULT 0
+      enabled TINYINT DEFAULT 1
     )
   `);
 
@@ -297,7 +295,7 @@ async function initDB() {
   // Seed default language if none exist
   const [langs] = await db.execute('SELECT code FROM languages LIMIT 1');
   if (langs.length === 0) {
-    await db.execute("INSERT INTO languages (code, label, flag, rtl, enabled, sort_order) VALUES ('en', 'English', '', 0, 1, 0)");
+    await db.execute("INSERT INTO languages (code, label, rtl, enabled) VALUES ('en', 'English', 0, 1)");
     console.log('Default language (English) seeded');
   }
 
