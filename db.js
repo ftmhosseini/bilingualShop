@@ -13,6 +13,14 @@ async function getPool() {
  const user = process.env.DB_USER || process.env.MYSQL_USER || 'root';
  const password = process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || '';
  const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || 'nuttymilk';
+ console.log('Connection attempt:', {
+  host: process.env.DB_HOST || process.env.MYSQL_HOST,
+  port: process.env.DB_PORT || process.env.MYSQL_PORT,
+  user: process.env.DB_USER || process.env.MYSQL_USER,
+  password: process.env.DB_PASSWORD ? '***' : 'MISSING',
+  database: process.env.DB_NAME || process.env.MYSQL_DATABASE
+});
+
  
  // Only use DATABASE_URL if individual vars are not set
  if (!process.env.DB_HOST && !process.env.MYSQL_HOST && process.env.DATABASE_URL) {
