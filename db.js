@@ -299,6 +299,52 @@ async function initDB() {
     console.log('Default language (English) seeded');
   }
 
+  // Seed default currency if none exist
+  const [currs] = await db.execute('SELECT id FROM currencies LIMIT 1');
+  if (currs.length === 0) {
+    await db.execute("INSERT INTO currencies (language_code, country, flag, currency_code, symbol, active, fraction_digits, sort_order) VALUES ('en', 'United States', '🇺🇸', 'USD', '$', 1, 2, 0)");
+    console.log('Default currency (USD) seeded');
+  }
+
+  // Seed default nav links if none exist
+  const [navs] = await db.execute('SELECT id FROM nav_links LIMIT 1');
+  if (navs.length === 0) {
+    const links = [
+      ['en', 'Home', '/', '🏠', 0],
+      ['en', 'Products', '/products', '🛍️', 1],
+      ['en', 'About Us', '/about', '📖', 2],
+      ['en', 'Contact', '/contact', '📞', 3],
+      ['en', 'FAQ', '/faq', '❓', 4],
+    ];
+    for (const [lang, label, url, icon, sort] of links) {
+      await db.execute("INSERT INTO nav_links (lang, label, url, icon, sort_order) VALUES (?,?,?,?,?)", [lang, label, url, icon, sort]);
+    }
+    console.log('Default nav links seeded');
+  }
+
+  // Seed sample products if none exist
+  const [prods] = await db.execute('SELECT id FROM products LIMIT 1');
+  if (prods.length === 0) {
+    const products = [
+      ['Organic Almond Milk', 'Creamy plant-based milk made from premium almonds', 50, 8.99],
+      ['Oat Milk Original', 'Smooth and naturally sweet oat milk', 75, 6.49],
+      ['Cashew Milk Vanilla', 'Rich vanilla-flavored cashew milk', 40, 9.49],
+      ['Coconut Milk Unsweetened', 'Light and refreshing coconut milk', 60, 5.99],
+      ['Hazelnut Milk Chocolate', 'Indulgent chocolate hazelnut milk', 35, 7.99],
+    ];
+    for (const [name, desc, stock, price] of products) {
+      const [r] = await db.execute(
+        "INSERT INTO products (name, stock, names, descriptions) VALUES (?, ?, ?, ?)",
+        [name, stock, JSON.stringify({en: name}), JSON.stringify({en: desc})]
+      );
+      await db.execute(
+        "INSERT INTO product_prices (product_id, currency, price) VALUES (?, 'USD', ?)",
+        [r.insertId, price]
+      );
+    }
+    console.log('Sample products seeded');
+  }
+
   return db;
 }
 
