@@ -282,6 +282,29 @@ async function initDB() {
     )
   `);
 
+  // page_content table
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS page_content (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      page VARCHAR(50) NOT NULL,
+      lang VARCHAR(10) NOT NULL,
+      title VARCHAR(255),
+      content TEXT,
+      UNIQUE KEY unique_page_lang (page, lang)
+    )
+  `);
+
+  // faq table
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS faq (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      lang VARCHAR(10) NOT NULL,
+      question TEXT,
+      answer TEXT,
+      sort_order INT DEFAULT 0
+    )
+  `);
+
   // Seed admin
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@nuttymilk.com';
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
