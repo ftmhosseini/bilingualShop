@@ -345,24 +345,39 @@ async function initDB() {
     console.log('Default nav links seeded');
   }
 
+  // Seed categories if none exist
+  const [cats] = await db.execute('SELECT id FROM categories LIMIT 1');
+  if (cats.length === 0) {
+    const [r1] = await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Plant Milks', NULL, ?)", [JSON.stringify({en:'Plant Milks'})]);
+    const [r2] = await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Nut Butters', NULL, ?)", [JSON.stringify({en:'Nut Butters'})]);
+    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Almond Milk', ?, ?)", [r1.insertId, JSON.stringify({en:'Almond Milk'})]);
+    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Oat Milk', ?, ?)", [r1.insertId, JSON.stringify({en:'Oat Milk'})]);
+    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Almond Butter', ?, ?)", [r2.insertId, JSON.stringify({en:'Almond Butter'})]);
+    console.log('Default categories seeded');
+  }
+
   // Seed sample products if none exist
   const [prods] = await db.execute('SELECT id FROM products LIMIT 1');
   if (prods.length === 0) {
+    const [catRows] = await db.execute("SELECT id, name FROM categories WHERE parent_id IS NOT NULL");
+    const catMap = {};
+    for (const c of catRows) catMap[c.name] = c.id;
+
     const products = [
-      ['Organic Almond Milk', 'Creamy plant-based milk made from premium almonds', 50, 8.99],
-      ['Oat Milk Original', 'Smooth and naturally sweet oat milk', 75, 6.49],
-      ['Cashew Milk Vanilla', 'Rich vanilla-flavored cashew milk', 40, 9.49],
-      ['Coconut Milk Unsweetened', 'Light and refreshing coconut milk', 60, 5.99],
-      ['Hazelnut Milk Chocolate', 'Indulgent chocolate hazelnut milk', 35, 7.99],
+      ['Organic Almond Milk', 'Creamy plant-based milk made from premium almonds', 50, 8.99, 'Almond Milk'],
+      ['Roasted Almond Milk', 'Bold roasted flavor with smooth finish', 45, 9.49, 'Almond Milk'],
+      ['Classic Oat Milk', 'Smooth and naturally sweet oat milk', 75, 6.49, 'Oat Milk'],
+      ['Barista Oat Milk', 'Perfect for coffee and lattes', 60, 7.99, 'Oat Milk'],
+      ['Creamy Almond Butter', 'Rich and smooth almond butter spread', 35, 12.99, 'Almond Butter'],
     ];
-    for (const [name, desc, stock, price] of products) {
+    for (const [name, desc, stock, price, cat] of products) {
       const [r] = await db.execute(
-        "INSERT INTO products (name, stock, names, descriptions) VALUES (?, ?, ?, ?)",
-        [name, stock, JSON.stringify({en: name}), JSON.stringify({en: desc})]
+        "INSERT INTO products (name, stock, names, descriptions, category_id) VALUES (?, ?, ?, ?, ?)",
+        [name, stock, JSON.stringify({en: name}), JSON.stringify({en: desc}), catMap[cat] || null]
       );
       await db.execute(
-        "INSERT INTO product_prices (product_id, currency, price) VALUES (?, 'USD', ?)",
-        [r.insertId, price]
+        "INSERT INTO product_prices (product_id, currency, price, langs) VALUES (?, 'USD', ?, ?)",
+        [r.insertId, price, JSON.stringify(['en'])]
       );
     }
     console.log('Sample products seeded');
