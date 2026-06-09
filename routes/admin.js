@@ -45,8 +45,12 @@ router.get('/backup', adminMiddleware, async (req, res) => {
 router.post('/restore', adminMiddleware, upload.single('backup'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   let backup;
-  try { backup = JSON.parse(req.file.buffer.toString()); }
-  catch { return res.status(400).json({ error: 'Invalid JSON file' }); }
+  try {
+    // Strip BOM if present, trim whitespace
+    const raw = req.file.buffer.toString('utf8').replace(/^\uFEFF/, '').trim();
+    backup = JSON.parse(raw);
+  }
+  catch (e) { return res.status(400).json({ error: `Invalid JSON file: ${e.message}` }); }
 
   const db = await getPool();
   const errors = [];
