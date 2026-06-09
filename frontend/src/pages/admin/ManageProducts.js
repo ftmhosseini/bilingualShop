@@ -246,7 +246,7 @@ export default function ManageProducts() {
       names, descriptions,
       stock: p.stock,
       category_id: p.category_id || '',
-      prices: p.prices?.length ? p.prices.map(pr => ({ currency: pr.currency, price: pr.price, sale_price: pr.sale_price || '', langs: pr.langs || [] })) : [],
+      prices: p.prices?.length ? p.prices.map(pr => ({ currency: pr.currency, price: pr.price, sale_price: pr.sale_price || '', langs: pr.langs && pr.langs.length ? pr.langs : [allCurrencies.find(c => c.currency_code === pr.currency)?.language_code || 'en'] })) : [],
       newVideos: [''],
     });
     setExistingMedia(p.media || []);

@@ -20,7 +20,15 @@ const BTN_PRESETS = [
 
 export default function ThemeSettings() {
   const { t } = useTranslation();
-  const { primaryColor, setPrimaryColor, accentColor, setAccentColor } = useTheme();
+  const { primaryColor, setPrimaryColor, accentColor, setAccentColor, bgColor, setBgColor, textColor, setTextColor } = useTheme();
+
+  // suggest black or white based on bg luminance
+  const suggestTextColor = (bg) => {
+    const hex = bg.replace('#', '');
+    const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+    const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
+    return luminance > 0.5 ? '#111111' : '#ffffff';
+  };
 
   return (
     <div>
@@ -45,6 +53,39 @@ export default function ThemeSettings() {
         </div>
         <div style={{ marginTop: 16, padding: 12, background: primaryColor, color: '#fff', borderRadius: 8, fontSize: 14 }}>
           Preview navbar
+        </div>
+      </div>
+
+      {/* Background color */}
+      <div className="card" style={{ maxWidth: 420, marginBottom: 20 }}>
+        <h3 style={{ marginBottom: 16 }}>🖼 Page Background Color</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <input type="color" value={bgColor} onChange={e => { setBgColor(e.target.value); setTextColor(suggestTextColor(e.target.value)); }}
+            style={{ width: 60, height: 40, padding: 2, cursor: 'pointer' }} />
+          <span style={{ fontFamily: 'monospace' }}>{bgColor}</span>
+          <button onClick={() => { setBgColor('#f3f3f3'); setTextColor('#111111'); }}
+            style={{ fontSize: 12, padding: '4px 10px', cursor: 'pointer', border: '1px solid #ddd', borderRadius: 4, background: '#fff' }}>Reset</button>
+        </div>
+        <div style={{ padding: 16, background: bgColor, borderRadius: 8, border: '1px solid #ddd', fontSize: 14, color: textColor }}>
+          Preview background &amp; text color
+        </div>
+      </div>
+
+      {/* Font color */}
+      <div className="card" style={{ maxWidth: 420, marginBottom: 20 }}>
+        <h3 style={{ marginBottom: 16 }}>🔤 Font Color</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
+            style={{ width: 60, height: 40, padding: 2, cursor: 'pointer' }} />
+          <span style={{ fontFamily: 'monospace' }}>{textColor}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setTextColor('#111111')}
+            style={{ background: '#111', color: '#fff', border: textColor === '#111111' ? '3px solid #febd69' : '2px solid transparent', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>Black</button>
+          <button onClick={() => setTextColor('#ffffff')}
+            style={{ background: '#fff', color: '#111', border: textColor === '#ffffff' ? '3px solid #febd69' : '2px solid #ddd', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>White</button>
+          <button onClick={() => setTextColor(suggestTextColor(bgColor))}
+            style={{ background: '#eee', color: '#333', border: '2px solid transparent', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>Auto ✨</button>
         </div>
       </div>
 

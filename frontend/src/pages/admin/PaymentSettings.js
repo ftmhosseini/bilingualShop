@@ -13,6 +13,8 @@ export default function PaymentSettings() {
 
   const toggle = i => setMethods(prev => { const m = [...prev]; m[i] = { ...m[i], enabled: !m[i].enabled }; return m; });
   const setLabel = (i, v) => setMethods(prev => { const m = [...prev]; m[i] = { ...m[i], label: v }; return m; });
+  const add = () => setMethods(prev => [...prev, { id: Date.now().toString(), label: 'New Method', enabled: true }]);
+  const remove = i => setMethods(prev => prev.filter((_, idx) => idx !== i));
 
   const save = async () => {
     await api.put('/api/settings/payment_methods', { value: JSON.stringify(methods) });
@@ -23,15 +25,20 @@ export default function PaymentSettings() {
     <div>
       <h2 style={{ marginBottom: 20 }}>Payment Methods</h2>
       <div className="card" style={{ maxWidth: 500, marginBottom: 32 }}>
+        {methods.length === 0 && <p style={{ color: '#aaa', fontSize: 13, marginBottom: 12 }}>No payment methods yet. Click "+ Add Method" to add one.</p>}
         {methods.map((m, i) => (
           <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid #eee' }}>
             <input type="checkbox" checked={m.enabled} onChange={() => toggle(i)} style={{ width: 18, height: 18 }} />
             <input value={m.label} onChange={e => setLabel(i, e.target.value)} style={{ flex: 1, marginBottom: 0 }} />
             <span style={{ fontSize: 12, color: m.enabled ? '#27ae60' : '#aaa' }}>{m.enabled ? 'Active' : 'Disabled'}</span>
+            <button onClick={() => remove(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b', fontSize: 16, lineHeight: 1 }}>✕</button>
           </div>
         ))}
-        <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={save}>Save</button>
-        {saved && <p style={{ color: 'green', marginTop: 8, fontSize: 13 }}>✓ Saved</p>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button className="btn btn-secondary" onClick={add}>+ Add Method</button>
+          <button className="btn btn-primary" onClick={save}>Save</button>
+          {saved && <span style={{ color: 'green', fontSize: 13, alignSelf: 'center' }}>✓ Saved</span>}
+        </div>
       </div>
 
       <BankingAccounts />

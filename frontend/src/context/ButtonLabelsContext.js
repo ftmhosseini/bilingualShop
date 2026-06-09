@@ -2,19 +2,19 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import api from '../api';
 
 const DEFAULTS = {
-  addToCart:  { color: '#febd69', labels: { en: 'Add to Cart',       fa: 'افزودن به سبد',    ar: 'أضف للسلة' } },
-  buyNow:     { color: '#f90',    labels: { en: 'Buy Now',           fa: 'خرید فوری',        ar: 'اشتر الآن' } },
-  shopNow:    { color: '#f90',    labels: { en: 'Shop Now',          fa: 'خرید کنید',        ar: 'تسوق الآن' } },
-  login:      { color: '#232f3e', labels: { en: 'Login',            fa: 'ورود',             ar: 'تسجيل الدخول' } },
-  register:   { color: '#232f3e', labels: { en: 'Register',         fa: 'ثبت‌نام',           ar: 'إنشاء حساب' } },
-  logout:     { color: '#c0392b', labels: { en: 'Logout',           fa: 'خروج',             ar: 'خروج' } },
-  save:       { color: '#27ae60', labels: { en: 'Save',             fa: 'ذخیره',            ar: 'حفظ' } },
-  cancel:     { color: '#888888', labels: { en: 'Cancel',           fa: 'انصراف',           ar: 'إلغاء' } },
-  search:     { color: '#232f3e', labels: { en: 'Search',           fa: 'جستجو',            ar: 'بحث' } },
-  back:       { color: '#888888', labels: { en: 'Back',             fa: 'بازگشت',           ar: 'رجوع' } },
-  placeOrder: { color: '#27ae60', labels: { en: 'Place Order',      fa: 'ثبت سفارش',        ar: 'تقديم الطلب' } },
-  continueShopping: { color: '#232f3e', labels: { en: 'Continue Shopping', fa: 'ادامه خرید', ar: 'مواصلة التسوق' } },
-  viewOrders: { color: '#232f3e', labels: { en: 'View Orders',      fa: 'سفارش‌ها',          ar: 'طلباتي' } },
+  addToCart:        { color: '#febd69', labels: { en: 'Add to Cart' } },
+  buyNow:           { color: '#f90',    labels: { en: 'Buy Now' } },
+  shopNow:          { color: '#f90',    labels: { en: 'Shop Now' } },
+  login:            { color: '#232f3e', labels: { en: 'Login' } },
+  register:         { color: '#232f3e', labels: { en: 'Register' } },
+  logout:           { color: '#c0392b', labels: { en: 'Logout' } },
+  save:             { color: '#27ae60', labels: { en: 'Save' } },
+  cancel:           { color: '#888888', labels: { en: 'Cancel' } },
+  search:           { color: '#232f3e', labels: { en: 'Search' } },
+  back:             { color: '#888888', labels: { en: 'Back' } },
+  placeOrder:       { color: '#27ae60', labels: { en: 'Place Order' } },
+  continueShopping: { color: '#232f3e', labels: { en: 'Continue Shopping' } },
+  viewOrders:       { color: '#232f3e', labels: { en: 'View Orders' } },
 };
 
 const Ctx = createContext();

@@ -16,8 +16,8 @@ router.put('/', adminMiddleware, async (req, res) => {
     const c = items[i];
     if (!c.currency_code || !c.language_code) continue;
     await db.execute(
-      'INSERT INTO currencies (language_code, country, flag, currency_code, symbol, active, sort_order, fraction_digits) VALUES (?,?,?,?,?,?,?,?)',
-      [c.language_code, c.country || '', c.flag || '', c.currency_code, c.symbol || '', c.active ? 1 : 0, i, c.fraction_digits ?? 2]
+      'INSERT INTO currencies (language_code, country, flag, currency_code, symbol, checkout_symbol, differ, active, sort_order, fraction_digits) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [c.language_code, c.country || '', c.flag || '', c.currency_code, c.symbol || '', c.checkout_symbol || '', c.differ ?? 1, c.active ? 1 : 0, i, c.fraction_digits ?? 2]
     );
   }
   res.json({ success: true });

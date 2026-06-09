@@ -28,7 +28,11 @@ import ShippingSettings from '../pages/admin/ShippingSettings';
 import PaymentSettings from '../pages/admin/PaymentSettings';
 import ContentSettings from '../pages/admin/ContentSettings';
 import MessagingSettings from '../pages/admin/MessagingSettings';
+import ManageBlog from '../pages/admin/ManageBlog';
+import Gallery from '../pages/admin/Gallery';
+import Backup from '../pages/admin/Backup';
 import Profile from '../pages/Profile';
+import Blog from '../pages/Blog';
 import NotFound from '../pages/NotFound';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -48,7 +52,7 @@ function PageTitleSetter({ pageTitles }) {
   useEffect(() => {
     const pageKey = ROUTE_PAGE[location.pathname] || 'home';
     const siteTitle = pageTitles?.title?.[lang] || 'Nutty Milk';
-    const siteIcon = pageTitles?._icons?.title || '🥛';
+    const siteIcon = pageTitles?._icons?.title || '';
     const pageTitle = pageTitles?.[pageKey]?.[lang];
     const pageIcon = pageTitles?._icons?.[pageKey] || '';
     document.title = pageTitle
@@ -69,6 +73,11 @@ export default function App() {
   useEffect(() => {
     api.get('/api/settings').then(r => {
       try { setPageTitles(JSON.parse(r.data.page_titles || '{}')); } catch {}
+      if (r.data.logo_url) {
+        const base = process.env.REACT_APP_API_URL || '';
+        const href = r.data.logo_url.startsWith('/uploads') ? `${base}${r.data.logo_url}` : r.data.logo_url;
+        document.querySelector("link[rel='icon']")?.setAttribute('href', href);
+      }
     }).catch(() => {});
   }, []);
 
@@ -93,6 +102,7 @@ export default function App() {
               <Route path="/faq" element={<FAQ />} />
               <Route path="/contact" element={<ContactUs />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/blog" element={<Blog />} />
               <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="*" element={<NotFound />} />
               <Route path="/admin" element={<AdminLayout />}>
@@ -106,6 +116,9 @@ export default function App() {
                 <Route path="payment" element={<PaymentSettings />} />
                 <Route path="content" element={<ContentSettings />} />
                 <Route path="messaging" element={<MessagingSettings />} />
+                <Route path="blog" element={<ManageBlog />} />
+                <Route path="gallery" element={<Gallery />} />
+                <Route path="backup" element={<Backup />} />
               </Route>
             </Routes>
             <Footer />

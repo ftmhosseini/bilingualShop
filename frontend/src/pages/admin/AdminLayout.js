@@ -19,13 +19,16 @@ export default function AdminLayout() {
         </div>
         <NavLink to="/admin" end>{t('dashboard')}</NavLink>
         <NavLink to="/admin/products">{t('manageProducts')}</NavLink>
-        <NavLink to="/admin/orders">{t('orders')}</NavLink>
         {user.role === 'admin' && <NavLink to="/admin/users">{t('manageUsers')}</NavLink>}
+        <NavLink to="/admin/gallery">{t('Gallery')}</NavLink>
+        <NavLink to="/admin/orders">{t('Orders')}</NavLink>
         {user.role === 'admin' && <NavLink to="/admin/theme">{t('themeSettings')}</NavLink>}
-        {user.role === 'admin' && <NavLink to="/admin/content">Content & Languages</NavLink>}
+        {user.role === 'admin' && <NavLink to="/admin/content">Content</NavLink>}
         {user.role === 'admin' && <NavLink to="/admin/shipping">Shipping</NavLink>}
         {user.role === 'admin' && <NavLink to="/admin/payment">Payment</NavLink>}
         {user.role === 'admin' && <NavLink to="/admin/messaging">Messaging</NavLink>}
+        {user.role === 'admin' && <NavLink to="/admin/blog">Blog</NavLink>}
+        {user.role === 'admin' && <NavLink to="/admin/backup">🗄️ Backup</NavLink>}
       </aside>
       <main className="admin-content">
         <Outlet />

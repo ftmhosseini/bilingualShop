@@ -52,7 +52,7 @@ router.post('/upload-image', shopMiddleware, uploadImage.single('image'), (req, 
 
 router.get('/images', shopMiddleware, (req, res) => {
   const dir = path.join(__dirname, '../uploads');
-  const files = fs.readdirSync(dir).filter(f => f !== 'logo.svg' && !f.startsWith('logo.') && /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
+  const files = fs.readdirSync(dir).filter(f => f !== 'logo.svg' && !f.startsWith('logo.') && /\.(jpg|jpeg|png|gif|webp|mp4|webm|ogg|mov)$/i.test(f));
   res.json(files.map(f => ({ filename: f, url: `/uploads/${f}` })));
 });
 

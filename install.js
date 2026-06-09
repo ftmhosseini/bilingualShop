@@ -55,15 +55,6 @@ button:hover{background:#219a52}button:disabled{background:#ccc;cursor:not-allow
 <input name="logo" type="file" accept="image/*" onchange="var r=new FileReader();r.onload=function(e){var p=document.getElementById('lp');p.src=e.target.result;p.style.display='block'};r.readAsDataURL(this.files[0])">
 <img id="lp" class="logo-preview">
 
-<h3>Language</h3>
-<div class="row">
-<div><label>Language Code</label><input name="lang_code" placeholder="en" required maxlength="10"></div>
-<div><label>Language Name</label><input name="lang_label" placeholder="English" required></div>
-</div>
-<div class="row">
-<div><label>Direction</label><select name="lang_dir"><option value="ltr">LTR (Left to Right)</option><option value="rtl">RTL (Right to Left)</option></select></div>
-</div>
-
 <h3>Admin Account</h3>
 <label>Admin Username</label><input name="admin_username" placeholder="admin" required>
 <label>Admin Email <span class="opt">(optional)</span></label><input name="admin_email" type="email">
@@ -124,19 +115,15 @@ const server = http.createServer(function(req, res) {
         const fields = parseMultipart(buf, boundary);
         const db_host = fields.db_host;
         const db_port = fields.db_port;
-        const db_name = fields.db_name;
+        const db_name = (fields.db_name || '').trim().replace(/\s+/g, '_');
         const db_user = fields.db_user;
         const db_pass = fields.db_pass || '';
         const site_name = fields.site_name;
-        const lang_code = fields.lang_code;
-        const lang_label = fields.lang_label;
-        const lang_dir = fields.lang_dir;
-        const lang_flag = fields.lang_flag || '';
         const admin_email = fields.admin_email || '';
         const admin_username = fields.admin_username;
         const admin_pass = fields.admin_pass;
 
-        if (!db_name || !db_user || !site_name || !lang_code || !lang_label || !admin_username || !admin_pass) {
+        if (!db_name || !db_user || !site_name || !admin_username || !admin_pass) {
           res.writeHead(400);
           return res.end(JSON.stringify({ error: 'All fields except logo and email are required' }));
         }
@@ -146,7 +133,8 @@ const server = http.createServer(function(req, res) {
         var conn;
         try {
           conn = await mysql.createConnection({ host: db_host, port: Number(db_port), user: db_user, password: db_pass });
-          await conn.execute('CREATE DATABASE IF NOT EXISTS `' + db_name + '`');
+          await conn.execute('DROP DATABASE IF EXISTS `' + db_name + '`');
+          await conn.execute('CREATE DATABASE `' + db_name + '`');
           await conn.end();
         } catch (err) {
           res.writeHead(400);
@@ -200,12 +188,6 @@ const server = http.createServer(function(req, res) {
 
         // Save site name
         await db.execute("INSERT INTO site_settings (key_name, value) VALUES ('site_name',?) ON DUPLICATE KEY UPDATE value=?", [site_name, site_name]);
-
-        // Insert first language
-        await db.execute(
-          "INSERT INTO languages (code, label, flag, rtl, enabled, sort_order) VALUES (?,?,?,?,1,0) ON DUPLICATE KEY UPDATE label=VALUES(label), flag=VALUES(flag), rtl=VALUES(rtl), enabled=1",
-          [lang_code, lang_label, lang_flag, lang_dir === 'rtl' ? 1 : 0]
-        );
 
         res.writeHead(200);
         res.end(JSON.stringify({ message: 'Installation complete! Your store is ready.' }));

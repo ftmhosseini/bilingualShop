@@ -25,5 +25,6 @@ app.use('/api/currencies', require('./routes/currencies'));
 app.use('/api/plugins', require('./routes/plugins'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/messaging', require('./routes/messaging'));
+app.use('/api/blogs', require('./routes/blogs'));
 
 module.exports = app;

@@ -60,6 +60,7 @@ export default function Products() {
   const [flatCats, setFlatCats] = useState([]);
   const [search, setSearch] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [uiTranslations, setUiTranslations] = useState({});
   const { add } = useCart();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -79,8 +80,12 @@ export default function Products() {
 
   useEffect(() => {
     api.get('/api/products').then(r => setProducts(r.data)).catch(() => {});
-    api.get('/api/categories/flat').then(r => setFlatCats(r.data)).catch(() => {});
-  }, []);
+    api.get(`/api/categories/flat?lang=${lang}`).then(r => setFlatCats(r.data)).catch(() => {});
+  }, [lang]);
+
+  useEffect(() => {
+    api.get(`/api/translations/${lang}`).then(r => setUiTranslations(r.data)).catch(() => {});
+  }, [lang]);
 
   function getDescendantIds(catId) {
     if (!catId) return new Set();
@@ -123,17 +128,19 @@ export default function Products() {
         {/* <input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 220 }} /> */}
         {flatCats.length > 0 && (
           <select value={filterCatId} onChange={e => setFilter(e.target.value)}>
-            <option value="">All Categories</option>
+            <option value="">{uiTranslations.allCategories || 'All Categories'}</option>
             {flatCats.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         )}
-        {filterCatId && (
+        {/* {filterCatId && (
           <button onClick={() => setFilter('')}
             style={{ background: 'none', border: '1px solid #ccc', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontSize: 13 }}>
             ✕ Clear
           </button>
-        )}
-        <span style={{ marginLeft: 'auto', fontSize: 13, color: '#888' }}>{filtered.length} products</span>
+        )} */}
+        <span style={{ marginLeft: 'auto', fontSize: 13, color: '#888' }}>
+          {(uiTranslations.productsCount || '{n} products').replace('{n}', filtered.length)}
+        </span>
       </div>
 
       {filtered.length === 0

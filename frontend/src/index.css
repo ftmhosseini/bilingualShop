@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap');
+
 :root {
   --primary: #131921;
   --primary-light: #232f3e;
@@ -5,32 +7,31 @@
   --accent-dark: #f3a847;
   --text-light: #fff;
   --bg: #f3f3f3;
+  --text: #111;
   --card-bg: #fff;
   --border: #ddd;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+button { box-sizing: border-box; }
 
 body {
   font-family: 'Amazon Ember', Arial, sans-serif;
   background: var(--bg);
-  color: #111;
+  color: var(--text);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-#root {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
+[dir='rtl'],
+[dir='rtl'] body,
+[dir='rtl'] * {
+  font-family: 'Vazirmatn', Tahoma, Arial, sans-serif !important;
 }
 
-#root footer {
-  margin-top: auto;
-}
-
-body, [dir='rtl'] { font-family: 'Tahoma', Arial, sans-serif; }
+#root { display: flex; flex-direction: column; min-height: 100vh; }
+#root footer { margin-top: auto; }
 
 a { text-decoration: none; color: inherit; }
 

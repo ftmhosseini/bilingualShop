@@ -166,22 +166,27 @@ export default function Home() {
       )}
       {/* Section 1: Hero Slider */}
       {slides.length > 0 && (
-        <div style={{ position: 'relative', overflow: 'hidden', background: 'var(--primary)' }}>
+        <div style={{ position: 'relative', overflow: 'hidden' }}>
           <div dir="ltr" style={{ display: 'flex', transition: 'transform 0.5s ease', transform: `translateX(${safeIdx * -100}%)` }}>
             {slides.map((s, i) => {
               const mediaSrc = s.mediaType === 'video' && s.video
                 ? (s.video.startsWith('http') ? s.video : `${base}${s.video}`)
                 : s.image ? (s.image.startsWith('http') ? s.image : `${base}${s.image}`) : null;
-              const mediaStyle = { width: '100%', height: s.height || 300, objectFit: s.fit || 'cover', objectPosition: s.position || 'center', marginBottom: 16 };
+              const mediaStyle = { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: s.fit || 'cover', objectPosition: s.position || 'center' };
               return (
-                <div key={i} style={{ minWidth: '100%', padding: '60px 40px', textAlign: 'center', background: s.bg || 'var(--primary)', cursor: s.link ? 'pointer' : 'default' }}
+                <div key={i} style={{ minWidth: '100%', aspectRatio: '3 / 1', position: 'relative', background: s.bg || 'var(--primary)', cursor: s.link ? 'pointer' : 'default' }}
                   onClick={() => s.link && navigate(s.link)}>
                   {mediaSrc && s.mediaType === 'video'
                     ? <video src={mediaSrc} autoPlay muted loop playsInline style={mediaStyle} />
                     : mediaSrc && <img src={mediaSrc} alt={s.title} style={mediaStyle} />}
-                  <h1 style={{ color: '#fff', fontSize: 28, marginBottom: 8 }}>{s.title}</h1>
-                  <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>{s.subtitle}</p>
-                  {s.link && <button className="btn btn-primary" style={{ marginTop: 16, background: btn('shopNow', lang).color }} onClick={() => navigate(s.link)}>{s.btnText || btn('shopNow', lang).label}</button>}
+                  {/* overlay */}
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)' }} />
+                  {/* content centered on top */}
+                  <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 24px' }}>
+                    <h1 style={{ color: '#fff', fontSize: 'clamp(28px,5vw,56px)', marginBottom: 12, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{s.title}</h1>
+                    <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: 'clamp(14px,2vw,20px)', maxWidth: 600, marginBottom: 28, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{s.subtitle}</p>
+                    {s.link && <button className="btn btn-primary" style={{ background: btn('shopNow', lang).color, fontSize: 16, padding: '12px 32px' }} onClick={e => { e.stopPropagation(); navigate(s.link); }}>{s.btnText || btn('shopNow', lang).label}</button>}
+                  </div>
                 </div>
               );
             })}
@@ -237,16 +242,17 @@ export default function Home() {
           <>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
               {categories.length > 0 && (
-                <select value={filterCatId} onChange={e => setFilterCatId(e.target.value)}>
-                  <option value="">All Categories</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-              )}
-              {filterCatId && (
-                <button onClick={() => setFilterCatId('')}
-                  style={{ background: 'none', border: '1px solid #ccc', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontSize: 13 }}>
-                  ✕ Clear
-                </button>
+                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                  <select value={filterCatId} onChange={e => setFilterCatId(e.target.value)}
+                    style={{ paddingRight: filterCatId ? 28 : undefined }}>
+                    <option value="">{t('allCategories')}</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                  {filterCatId && (
+                    <span onClick={() => setFilterCatId('')}
+                      style={{ position: 'absolute', right: 22, cursor: 'pointer', fontSize: 14, color: '#888', lineHeight: 1, userSelect: 'none' }}>✕</span>
+                  )}
+                </div>
               )}
             </div>
             {filtered.length === 0

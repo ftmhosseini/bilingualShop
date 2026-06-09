@@ -3,20 +3,33 @@ const { authMiddleware } = require('../middleware');
 const { getPool } = require('../db');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
+
+const receiptUpload = multer({
+  storage: multer.diskStorage({
+    destination: 'uploads/',
+    filename: (req, file, cb) => cb(null, 'receipt-' + Date.now() + path.extname(file.originalname)),
+  }),
+  fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('image/')),
+});
 
 // Load and run a payment plugin by currency
-async function runPaymentPlugin(currency, order, config) {
-  const pluginPath = path.join(__dirname, '../plugins', config._filename);
+function loadPlugin(filename) {
+  const pluginPath = path.join(__dirname, '../plugins', filename);
   if (!fs.existsSync(pluginPath)) throw new Error('Plugin file not found');
-  const plugin = require(pluginPath);
-  return plugin.charge(order, config);
+  if (path.extname(filename).toLowerCase() === '.php') {
+    const { makePhpPlugin } = require('../plugins/php-runner');
+    return makePhpPlugin(pluginPath);
+  }
+  return require(pluginPath);
+}
+
+async function runPaymentPlugin(currency, order, config) {
+  return loadPlugin(config._filename).charge(order, config);
 }
 
 async function verifyPaymentPlugin(currency, params, config) {
-  const pluginPath = path.join(__dirname, '../plugins', config._filename);
-  if (!fs.existsSync(pluginPath)) throw new Error('Plugin file not found');
-  const plugin = require(pluginPath);
-  return plugin.verify(params, config);
+  return loadPlugin(config._filename).verify(params, config);
 }
 
 // Initiate gateway payment — returns redirect_url
@@ -27,8 +40,8 @@ router.post('/initiate-payment', authMiddleware, async (req, res) => {
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
   const [plugins] = await db.execute(
-    'SELECT * FROM plugins WHERE type=? AND currency_code=? AND active=1 LIMIT 1',
-    ['payment', currency]
+    'SELECT * FROM plugins WHERE type=? AND active=1 AND (currency_code=? OR currency_code IS NULL) ORDER BY (currency_code=?) DESC LIMIT 1',
+    ['payment', currency, currency]
   );
   if (!plugins.length) return res.status(404).json({ error: 'No active payment plugin for this currency' });
 
@@ -49,8 +62,8 @@ router.get('/verify-payment', async (req, res) => {
   const db = await getPool();
 
   const [plugins] = await db.execute(
-    'SELECT * FROM plugins WHERE type=? AND currency_code=? AND active=1 LIMIT 1',
-    ['payment', currency]
+    'SELECT * FROM plugins WHERE type=? AND active=1 AND (currency_code=? OR currency_code IS NULL) ORDER BY (currency_code=?) DESC LIMIT 1',
+    ['payment', currency, currency]
   );
   if (!plugins.length) return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/orders?error=no_plugin`);
 
@@ -106,6 +119,47 @@ router.put('/:id/status', require('../middleware').shopMiddleware, async (req, r
   const db = await getPool();
   await db.execute('UPDATE orders SET status=? WHERE id=?', [req.body.status, req.params.id]);
   res.json({ success: true });
+});
+
+router.post('/check-availability', async (req, res) => {
+  const { items, currency } = req.body; // items: [{product_id, name}]
+  const db = await getPool();
+  const unavailable = [];
+  for (const item of items) {
+    const [[p]] = await db.execute('SELECT stock, available_currencies FROM products WHERE id=?', [item.product_id]);
+    if (!p) { unavailable.push(item.name || `Product #${item.product_id}`); continue; }
+    const allowed = (p.available_currencies || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (allowed.length > 0 && !allowed.includes(currency)) {
+      unavailable.push(item.name || `Product #${item.product_id}`);
+    }
+  }
+  if (unavailable.length > 0) return res.json({ ok: false, unavailable });
+  res.json({ ok: true });
+});
+
+// GET payment info based on currency (card for IRR, PayPal for others)
+router.get('/payment-info', async (req, res) => {
+  const { currency } = req.query;
+  const db = await getPool();
+  const [rows] = await db.execute(
+    "SELECT key_name, value FROM site_settings WHERE key_name IN ('card_number','card_holder','paypal_email')"
+  );
+  const s = {};
+  rows.forEach(r => s[r.key_name] = r.value);
+  if (currency === 'IRR') {
+    res.json({ type: 'card', card_number: s.card_number || '', card_holder: s.card_holder || '' });
+  } else {
+    res.json({ type: 'paypal', paypal_email: s.paypal_email || '' });
+  }
+});
+
+// POST receipt image for an order
+router.post('/:id/receipt', authMiddleware, receiptUpload.single('receipt'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+  const url = `/uploads/${req.file.filename}`;
+  const db = await getPool();
+  await db.execute('UPDATE orders SET receipt_url=?, payment_status=? WHERE id=?', [url, 'receipt_uploaded', req.params.id]);
+  res.json({ url });
 });
 
 module.exports = router;

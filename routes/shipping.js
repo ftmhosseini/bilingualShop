@@ -33,8 +33,11 @@ function iranRates(province) {
 async function runShippingPlugin(filename, payload, config) {
   const pluginPath = path.join(__dirname, '../plugins', filename);
   if (!fs.existsSync(pluginPath)) throw new Error('Plugin file not found');
-  const plugin = require(pluginPath);
-  return plugin.getRates(payload, config);
+  if (path.extname(filename).toLowerCase() === '.php') {
+    const { makePhpPlugin } = require('../plugins/php-runner');
+    return makePhpPlugin(pluginPath).getRates(payload, config);
+  }
+  return require(pluginPath).getRates(payload, config);
 }
 
 // POST /api/shipping/rates

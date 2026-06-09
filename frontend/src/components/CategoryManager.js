@@ -102,7 +102,7 @@ const btnStyle = bg => ({
   padding: '2px 7px', cursor: 'pointer', fontSize: 12,
 });
 
-export default function CategoryManager({ categories, onRefresh }) {
+export default function CategoryManager({ categories, onRefresh, inline = false }) {
   const [names, setNames] = useState({});
   const [langs, setLangs] = useState([{ code: 'en', label: 'English', flag: '🇬🇧', rtl: false }]);
 
@@ -119,27 +119,30 @@ export default function CategoryManager({ categories, onRefresh }) {
     setNames({}); onRefresh();
   };
 
+  const inner = (
+    <div style={{ background: '#f9f9f9', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginTop: inline ? 0 : 8 }}>
+      <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
+        Add top-level categories with names in each language, then use <strong>+ sub</strong> to nest deeper.
+      </p>
+      <div style={{ marginBottom: 16 }}>
+        <NameInputs names={names} onChange={setNames} langs={langs} />
+        <button className="btn btn-primary" style={{ fontSize: 13, marginTop: 8 }} onClick={addRoot}>+ Add Top-Level</button>
+      </div>
+      {categories.length === 0
+        ? <p style={{ fontSize: 13, color: '#aaa' }}>No categories yet.</p>
+        : categories.map(node => <CategoryNode key={node.id} node={node} onRefresh={onRefresh} langs={langs} depth={0} />)
+      }
+    </div>
+  );
+
+  if (inline) return inner;
+
   return (
     <details style={{ marginBottom: 20 }}>
       <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 14, padding: '8px 0' }}>
         🗂 Manage Categories ({categories.length} top-level)
       </summary>
-      <div style={{ background: '#f9f9f9', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginTop: 8 }}>
-        <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
-          Add top-level categories with names in each language, then use <strong>+ sub</strong> to nest deeper.
-        </p>
-
-        {/* Add root */}
-        <div style={{ marginBottom: 16 }}>
-          <NameInputs names={names} onChange={setNames} langs={langs} />
-          <button className="btn btn-primary" style={{ fontSize: 13, marginTop: 8 }} onClick={addRoot}>+ Add Top-Level</button>
-        </div>
-
-        {categories.length === 0
-          ? <p style={{ fontSize: 13, color: '#aaa' }}>No categories yet.</p>
-          : categories.map(node => <CategoryNode key={node.id} node={node} onRefresh={onRefresh} langs={langs} depth={0} />)
-        }
-      </div>
+      {inner}
     </details>
   );
 }

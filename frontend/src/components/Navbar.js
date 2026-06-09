@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
-import { FiShoppingCart } from 'react-icons/fi';
+import { FiLogOut, FiShoppingCart } from 'react-icons/fi';
 import { useEffect, useRef, useState } from 'react';
 import api from '../api';
 
@@ -45,10 +45,12 @@ export default function Navbar() {
 
   const [appName, setAppName] = useState('');
   const [siteIcon, setSiteIcon] = useState('');
+  const [authLabels, setAuthLabels] = useState({});
   const [catTree, setCatTree] = useState([]);
   const [catOpen, setCatOpen] = useState(false);
   const catRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [uiTranslations, setUiTranslations] = useState({});
 
   const handleSearch = () => {
     const q = searchQuery.trim();
@@ -68,6 +70,7 @@ export default function Navbar() {
         setAppName(titles.title || {});
         setSiteIcon(titles._icons?.title || '');
       } catch { }
+      try { setAuthLabels(JSON.parse(r.data.auth_page_labels || '{}')); } catch { }
     }).catch(() => { });
     api.get('/api/currencies').then(r => {
       const active = r.data.filter(c => c.active);
@@ -99,6 +102,7 @@ export default function Navbar() {
       if (r.data.length > 0) setNavLinks(r.data);
       else api.get('/api/navlinks/en').then(r2 => setNavLinks(r2.data)).catch(() => { });
     }).catch(() => { });
+    api.get(`/api/translations/${code}`).then(r => setUiTranslations(r.data)).catch(() => {});
   }, [lang, selectedCurrency]);
 
   // If current language was removed, switch to first available
@@ -250,6 +254,7 @@ export default function Navbar() {
                   <button key={c.currency_code} onClick={() => {
                     setSelectedCurrency(c);
                     localStorage.setItem('selectedCurrency', JSON.stringify(c));
+                    window.dispatchEvent(new CustomEvent('currencychange', { detail: c }));
                     changeLanguage(c.language_code, c.rtl);
                     setLangOpen(false);
                   }}
@@ -305,23 +310,27 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link to="/login" style={{ color: '#ccc', fontSize: 13, padding: '4px 10px', whiteSpace: 'nowrap' }}>{t('login')}</Link>
+              <Link to="/login" style={{ color: '#ccc', fontSize: 13, padding: '4px 10px', whiteSpace: 'nowrap' }}>{authLabels[i18n.language?.split('-')[0]]?.login_button || authLabels['en']?.login_button || t('login')}</Link>
               <span style={{ color: 'rgba(255,255,255,0.3)' }}>|</span>
-              <Link to="/register" style={{ color: '#ccc', fontSize: 13, padding: '4px 10px', whiteSpace: 'nowrap' }}>{t('register')}</Link>
+              <Link to="/register" style={{ color: '#ccc', fontSize: 13, padding: '4px 10px', whiteSpace: 'nowrap' }}>{authLabels[i18n.language?.split('-')[0]]?.register_button_short || authLabels['en']?.register_button_short || t('register')}</Link>
             </>
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Link to="/cart" style={{ color: '#febd69', fontWeight: 'bold', fontSize: 13, padding: '4px 10px', whiteSpace: 'nowrap' }}>
-            <FiShoppingCart size={20} />
+          <Link to="/cart" style={{ color: '#febd69', fontWeight: 'bold', fontSize: 13, padding: '4px 8px', whiteSpace: 'nowrap' }}>
+            <FiShoppingCart size={25} />
 
             {items.length > 0 && <span style={{ background: '#f00', color: '#fff', borderRadius: '50%', padding: '1px 5px', fontSize: 11 }}>{items.length}</span>}
           </Link>
         {user && (
           <button onClick={() => { logout(); navigate('/'); }}
-            title="Sign out"
-            style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <span className="material-icons" style={{ fontSize: 20 }}>logout</span>
+            title={uiTranslations.logout || t('logout')}
+            style={{ background: 'transparent', whiteSpace: 'nowrap',// border: '1px solid rgba(255,255,255,0.4)',
+               color: '#febd69', //borderRadius: 4, 
+               padding: '2px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center'
+              
+            }}>
+            <FiLogOut size={20} />
           </button>
         )}
         </div>

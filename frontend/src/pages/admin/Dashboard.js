@@ -12,7 +12,6 @@ export default function Dashboard() {
   const [logoUrl, setLogoUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [images, setImages] = useState([]);
   const fileRef = useRef();
   const [androidUrl, setAndroidUrl] = useState('');
   const [iosUrl, setIosUrl] = useState('');
@@ -24,10 +23,7 @@ export default function Dashboard() {
       setAndroidUrl(r.data.android_app_url || '');
       setIosUrl(r.data.ios_app_url || '');
     });
-    if (user?.role === 'admin') loadImages();
   }, []);
-
-  const loadImages = () => api.get('/api/settings/images').then(r => setImages(r.data));
 
   const saveAppUrl = async (key, value) => {
     await api.put(`/api/settings/${key}`, { value });
@@ -45,12 +41,6 @@ export default function Dashboard() {
     setLogoUrl(r.data.url);
     setUploading(false);
     setSaved(true); setTimeout(() => setSaved(false), 2000);
-  };
-
-  const deleteImage = async (filename) => {
-    if (!window.confirm('Delete this image?')) return;
-    await api.delete(`/api/settings/images/${filename}`);
-    loadImages();
   };
 
   return (
@@ -81,11 +71,11 @@ export default function Dashboard() {
           </p>
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>🤖 Android (Google Play URL)</label>
-            <div style={{ display: 'flex', gap: 8}}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <input value={androidUrl} onChange={e => setAndroidUrl(e.target.value)}
                 placeholder="https://play.google.com/store/apps/details?id=..."
-                style={{ flex: 1, fontSize: 13, height:30 }} />
-              <button className="btn btn-primary" style={{ fontSize: 13, whiteSpace: 'nowrap' , height:30}}
+                style={{ flex: 1, fontSize: 13, height: 30 }} />
+              <button className="btn btn-primary" style={{ fontSize: 13, whiteSpace: 'nowrap', height: 30 }}
                 onClick={() => saveAppUrl('android_app_url', androidUrl)}>Save</button>
             </div>
             {appSaved === 'android_app_url' && <span style={{ color: 'green', fontSize: 12 }}>✓ Saved</span>}
@@ -95,42 +85,13 @@ export default function Dashboard() {
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={iosUrl} onChange={e => setIosUrl(e.target.value)}
                 placeholder="https://apps.apple.com/app/..."
-                style={{ flex: 1, fontSize: 13 , height:30}} />
-              <button className="btn btn-primary" style={{ fontSize: 13, whiteSpace: 'nowrap', height:30 }}
+                style={{ flex: 1, fontSize: 13, height: 30 }} />
+              <button className="btn btn-primary" style={{ fontSize: 13, whiteSpace: 'nowrap', height: 30 }}
                 onClick={() => saveAppUrl('ios_app_url', iosUrl)}>Save</button>
             </div>
             {appSaved === 'ios_app_url' && <span style={{ color: 'green', fontSize: 12 }}>✓ Saved</span>}
           </div>
         </div>
-      )}
-
-      {/* Image Gallery — admin only */}
-      {user?.role === 'admin' && (
-      <div className="card" style={{ marginTop: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ margin: 0 }}>🖼️ Image Gallery</h3>
-          <span style={{ fontSize: 13, color: '#888' }}>{images.length} image{images.length !== 1 ? 's' : ''}</span>
-        </div>
-        {images.length === 0 ? (
-          <p style={{ color: '#aaa', fontSize: 14 }}>No uploaded images yet. Upload images via Hero Slides in Content Settings.</p>
-        ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            {images.map(img => (
-              <div key={img.filename} style={{ position: 'relative', border: '1px solid #ddd', borderRadius: 6, overflow: 'hidden', width: 120 }}>
-                <img src={`${base}${img.url}`} alt={img.filename}
-                  style={{ width: 120, height: 90, objectFit: 'cover', display: 'block' }} />
-                <div style={{ padding: '4px 6px', background: '#f9f9f9', fontSize: 11, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {img.filename.replace(/^\d+-/, '')}
-                </div>
-                <button onClick={() => deleteImage(img.filename)}
-                  style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
       )}
 
       <div style={{ display: 'flex', gap: 16, marginTop: 24, flexWrap: 'wrap' }}>

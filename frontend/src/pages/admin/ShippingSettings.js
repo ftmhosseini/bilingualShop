@@ -3,11 +3,14 @@ import api from '../../api';
 
 export default function ShippingSettings() {
   const [methods, setMethods] = useState([]);
+  const [multipliers, setMultipliers] = useState([]);
   const [saved, setSaved] = useState(false);
+  const [savedMult, setSavedMult] = useState(false);
 
   useEffect(() => {
     api.get('/api/settings').then(r => {
       if (r.data.shipping_methods) setMethods(JSON.parse(r.data.shipping_methods));
+      if (r.data.shipping_multipliers) setMultipliers(JSON.parse(r.data.shipping_multipliers));
     });
   }, []);
 
@@ -15,9 +18,18 @@ export default function ShippingSettings() {
   const add = () => setMethods(prev => [...prev, { id: Date.now().toString(), label: '', price: 0, days: '' }]);
   const remove = i => setMethods(prev => prev.filter((_, idx) => idx !== i));
 
+  const setMul = (i, k, v) => setMultipliers(prev => { const m = [...prev]; m[i] = { ...m[i], [k]: v }; return m; });
+  const addMul = () => setMultipliers(prev => [...prev, { country: '', multiplier: 1 }]);
+  const removeMul = i => setMultipliers(prev => prev.filter((_, idx) => idx !== i));
+
   const save = async () => {
     await api.put('/api/settings/shipping_methods', { value: JSON.stringify(methods) });
     setSaved(true); setTimeout(() => setSaved(false), 2000);
+  };
+
+  const saveMult = async () => {
+    await api.put('/api/settings/shipping_multipliers', { value: JSON.stringify(multipliers) });
+    setSavedMult(true); setTimeout(() => setSavedMult(false), 2000);
   };
 
   return (
@@ -38,6 +50,30 @@ export default function ShippingSettings() {
           <button className="btn btn-primary" onClick={save}>Save</button>
         </div>
         {saved && <p style={{ color: 'green', marginTop: 8, fontSize: 13 }}>✓ Saved</p>}
+      </div>
+
+      <h3 style={{ marginBottom: 8 }}>🌍 Shipping Price Multiplier by Country</h3>
+      <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
+        Multiply the calculated shipping price by a factor per destination country. Example: Iran × 1, Canada × 16.
+      </p>
+      <div className="card" style={{ maxWidth: 500, marginBottom: 32 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 12, color: '#888' }}>Country name (as typed in checkout)</span>
+          <span style={{ fontSize: 12, color: '#888' }}>Multiplier</span>
+          <span />
+        </div>
+        {multipliers.map((m, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+            <input placeholder="Iran / Canada / UAE…" value={m.country} onChange={e => setMul(i, 'country', e.target.value)} style={{ marginBottom: 0 }} />
+            <input type="number" step="0.01" min="0" placeholder="1" value={m.multiplier} onChange={e => setMul(i, 'multiplier', parseFloat(e.target.value) || 1)} style={{ marginBottom: 0 }} />
+            <button className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={() => removeMul(i)}>✕</button>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button className="btn btn-secondary" onClick={addMul}>+ Add Country</button>
+          <button className="btn btn-primary" onClick={saveMult}>Save</button>
+        </div>
+        {savedMult && <p style={{ color: 'green', marginTop: 8, fontSize: 13 }}>✓ Saved</p>}
       </div>
 
       <PluginSection type="shipping" />

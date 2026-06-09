@@ -6,6 +6,7 @@ export default function AboutUs() {
   const { i18n } = useTranslation();
   const [pageData, setPageData] = useState({ title: 'About Us', content: '' });
   const [settings, setSettings] = useState({});
+  const [translations, setTranslations] = useState({});
   const lang = i18n.language?.split('-')[0];
   const isRTL = ['fa', 'ar'].includes(lang);
 
@@ -22,6 +23,7 @@ export default function AboutUs() {
       if (entry) setPageData({ title: entry.title, content: entry.content });
     }).catch(() => {});
     api.get('/api/settings').then(r => setSettings(r.data)).catch(() => {});
+    api.get(`/api/translations/${lang}`).then(r => setTranslations(r.data)).catch(() => {});
   }, [lang]);
 
   const features = (() => { try { return JSON.parse(settings[`about_features_${lang}`] || 'null') || DEFAULT_FEATURES; } catch { return DEFAULT_FEATURES; } })();
@@ -49,7 +51,7 @@ export default function AboutUs() {
         </div>
       </div>
       <div className="card">
-        <h2 style={{ marginBottom: 16 }}>📍 Find Us</h2>
+        <h2 style={{ marginBottom: 16 }}>📍 {translations.findUs || (isRTL ? 'موقعیت ما' : 'Find Us')}</h2>
         <p style={{ fontSize: 14, color: '#555', marginBottom: 12 }}>{settings.contact_address || '123 Nut Street, Toronto, ON, Canada'}</p>
         <iframe title="Store Location" src={mapUrl} style={{ width: '100%', height: 350, border: '1px solid #ddd', borderRadius: 8 }} allowFullScreen />
       </div>

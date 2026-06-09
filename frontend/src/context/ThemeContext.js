@@ -6,6 +6,8 @@ const ThemeContext = createContext();
 const DEFAULTS = {
   primaryColor: '#131921',
   accentColor: '#febd69',
+  bgColor: '#f3f3f3',
+  textColor: '#111111',
 };
 
 // darken a hex color by a fraction (0–1)
@@ -24,6 +26,12 @@ export function ThemeProvider({ children }) {
   const [accentColor, setAccentColorState] = useState(
     () => localStorage.getItem('accentColor') || DEFAULTS.accentColor
   );
+  const [bgColor, setBgColorState] = useState(
+    () => localStorage.getItem('bgColor') || DEFAULTS.bgColor
+  );
+  const [textColor, setTextColorState] = useState(
+    () => localStorage.getItem('textColor') || DEFAULTS.textColor
+  );
   const [dir, setDir] = useState(() => localStorage.getItem('dir') || 'ltr');
 
   useEffect(() => {
@@ -39,17 +47,28 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', accentColor);
-    // compute a ~20% darker shade for hover / Buy Now
     const dark = darken(accentColor, 0.2);
     document.documentElement.style.setProperty('--accent-dark', dark);
     localStorage.setItem('accentColor', accentColor);
   }, [accentColor]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--bg', bgColor);
+    localStorage.setItem('bgColor', bgColor);
+  }, [bgColor]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--text', textColor);
+    localStorage.setItem('textColor', textColor);
+  }, [textColor]);
 
   // Load from backend on mount
   useEffect(() => {
     api.get('/api/settings').then(r => {
       if (r.data.primary_color) setPrimaryColorState(r.data.primary_color);
       if (r.data.accent_color) setAccentColorState(r.data.accent_color);
+      if (r.data.bg_color) setBgColorState(r.data.bg_color);
+      if (r.data.text_color) setTextColorState(r.data.text_color);
     }).catch(() => { });
   }, []);
 
@@ -63,10 +82,20 @@ export function ThemeProvider({ children }) {
     await api.put('/api/settings/accent_color', { value: val }).catch(() => { });
   };
 
+  const setBgColor = async (val) => {
+    setBgColorState(val);
+    await api.put('/api/settings/bg_color', { value: val }).catch(() => { });
+  };
+
+  const setTextColor = async (val) => {
+    setTextColorState(val);
+    await api.put('/api/settings/text_color', { value: val }).catch(() => { });
+  };
+
   return (
     <ThemeContext.Provider value={{
       primaryColor, setPrimaryColor, accentColor,
-      setAccentColor, dir, setDir
+      setAccentColor, bgColor, setBgColor, textColor, setTextColor, dir, setDir
     }}>      
     {children}
     </ThemeContext.Provider>

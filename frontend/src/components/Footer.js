@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { FaAndroid, FaApple } from 'react-icons/fa';
 import api from '../api';
 
 export default function Footer() {
   const { primaryColor } = useTheme();
+  const { i18n } = useTranslation();
+  const isRTL = ['fa', 'ar'].includes(i18n.language?.split('-')[0]);
   const [androidUrl, setAndroidUrl] = useState('');
   const [iosUrl, setIosUrl] = useState('');
   const [badges, setBadges] = useState([]);
@@ -54,7 +57,11 @@ export default function Footer() {
         </div>
       )}
 </div>
-      <div style={{ fontSize: 13 }}>© {new Date().getFullYear()} Nutty Milk. All rights reserved.</div>
+      <div style={{ fontSize: 13 }}>
+        {isRTL
+          ? `© ${new Date().getFullYear()} ناتی میلک. تمامی حقوق محفوظ است.`
+          : `© ${new Date().getFullYear()} Nutty Milk. All rights reserved.`}
+      </div>
     </footer>
   );
 }

@@ -46,9 +46,11 @@ async function initDB() {
       image VARCHAR(255),
       image_fa VARCHAR(255),
       image_ar VARCHAR(255),
-      stock INT DEFAULT 0
+      stock INT DEFAULT 0,
+      available_currencies VARCHAR(255) DEFAULT ''
     )
   `);
+  await db.execute(`ALTER TABLE products ADD COLUMN available_currencies VARCHAR(255) DEFAULT ''`).catch(() => {});
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS product_prices (
@@ -120,6 +122,7 @@ async function initDB() {
     ["orders", "shipping_postal", "VARCHAR(20)"],
     ["orders", "shipping_phone", "VARCHAR(50)"],
     ["orders", "notes", "TEXT"],
+    ["orders", "receipt_url", "VARCHAR(500)"],
     ["products", "category_id", "INT"],
   ];
   for (const [table, column, definition] of migrations) {
@@ -214,6 +217,8 @@ async function initDB() {
       flag VARCHAR(10),
       currency_code VARCHAR(10),
       symbol VARCHAR(10),
+      checkout_symbol VARCHAR(20) DEFAULT '',
+      differ DECIMAL(10,4) DEFAULT 1,
       active TINYINT DEFAULT 1,
       fraction_digits TINYINT DEFAULT 2,
       sort_order INT DEFAULT 0
@@ -222,6 +227,8 @@ async function initDB() {
   // add columns to existing installs (ignore error if column already exists)
   await db.execute(`ALTER TABLE currencies ADD COLUMN fraction_digits TINYINT DEFAULT 2`).catch(() => {});
   await db.execute(`ALTER TABLE currencies ADD COLUMN sort_order INT DEFAULT 0`).catch(() => {});
+  await db.execute(`ALTER TABLE currencies ADD COLUMN checkout_symbol VARCHAR(20) DEFAULT ''`).catch(() => {});
+  await db.execute(`ALTER TABLE currencies ADD COLUMN differ DECIMAL(10,4) DEFAULT 1`).catch(() => {});
 
   // nav_links table
   await db.execute(`
@@ -294,6 +301,111 @@ async function initDB() {
     )
   `);
 
+  // Migrate existing categories to add English names JSON if missing
+  {
+    const enNames = {
+      'Plant Milks': 'Plant Milks',
+      'Nut Butters': 'Nut Butters',
+      'Almond Milk': 'Almond Milk',
+      'Oat Milk': 'Oat Milk',
+      'Almond Butter': 'Almond Butter',
+      'Nutty Milk': 'Nutty Milk',
+      'Saffron Pistachio Milk': 'Saffron Pistachio Milk',
+      'Saffron Almond Milk': 'Saffron Almond Milk',
+      'Saffron Coconut Milk': 'Saffron Coconut Milk',
+      'Combo Box': 'Combo Box',
+    };
+    const [cats] = await db.execute('SELECT id, name, names FROM categories');
+    for (const cat of cats) {
+      let names = {};
+      try { names = JSON.parse(cat.names || '{}'); } catch {}
+      if (!names.en && enNames[cat.name]) {
+        await db.execute('UPDATE categories SET names=? WHERE id=?', [JSON.stringify({ en: enNames[cat.name] }), cat.id]);
+      }
+    }
+  }
+
+  // Seed site_settings contact info (used by ContactUs page)
+  const contactSettings = {
+    contact_email: 'info@nuttymilk.com',
+    contact_phone: '',
+    contact_address: '',
+    contact_hours: 'Monday to Friday, 9am to 6pm',
+    card_number: '',
+    card_holder: '',
+    paypal_email: '',
+    hero_slides: JSON.stringify([
+      {
+        title: 'Nutty Milk',
+        subtitle: 'The golden blend of milk, saffron & premium nuts — healthy, nutritious, delicious.',
+        bg: '#2c1a0e',
+        image: '',
+        mediaType: 'image',
+        height: '100vh',
+        fit: 'cover',
+        position: 'center',
+        link: '/products',
+        btnText: 'Order Now',
+        langs: [],
+      },
+    ]),
+    button_labels: JSON.stringify({
+      addToCart:        { color: '#febd69', labels: { en: 'Add to Cart' } },
+      buyNow:           { color: '#f90',    labels: { en: 'Buy Now' } },
+      shopNow:          { color: '#f90',    labels: { en: 'Shop Now' } },
+      login:            { color: '#232f3e', labels: { en: 'Login' } },
+      register:         { color: '#232f3e', labels: { en: 'Register' } },
+      logout:           { color: '#c0392b', labels: { en: 'Logout' } },
+      save:             { color: '#27ae60', labels: { en: 'Save' } },
+      cancel:           { color: '#888888', labels: { en: 'Cancel' } },
+      search:           { color: '#232f3e', labels: { en: 'Search' } },
+      back:             { color: '#888888', labels: { en: 'Back' } },
+      placeOrder:       { color: '#27ae60', labels: { en: 'Place Order' } },
+      continueShopping: { color: '#232f3e', labels: { en: 'Continue Shopping' } },
+      viewOrders:       { color: '#232f3e', labels: { en: 'View Orders' } },
+    }),
+    home_tab_labels: JSON.stringify({
+      all:   { en: 'All Products' },
+      new:   { en: 'New Arrivals' },
+      deals: { en: 'Best Deals' },
+    }),
+    page_titles: JSON.stringify({ title: { en: 'Nutty Milk' } }),
+    auth_page_labels: JSON.stringify({
+      en: {
+        login_title:                  'Login',
+        login_identifier:             'Email or Phone',
+        login_identifier_placeholder: 'email@example.com or +1234567890',
+        login_password:               'Password',
+        login_button:                 'Login',
+        login_forgot:                 'Forgot Password?',
+        login_no_account:             "Don't have an account?",
+        register_title:               'Register',
+        register_button_short:        'Register',
+        register_identifier:          'Email or Phone',
+        register_password:            'Password',
+        register_button:              'Send Verification Code',
+        register_has_account:         'Already have an account?',
+        verify_title:                 'Enter the 5-digit code sent to',
+        verify_button:                'Verify & Create Account',
+        verify_resend:                'Resend Code',
+        forgot_title:                 'Forgot Password',
+        forgot_button:                'Send Reset Code',
+        forgot_back:                  '← Back to Login',
+        reset_title:                  'Reset Password',
+        reset_code_label:             'Code',
+        reset_newpass_label:          'New Password',
+        reset_button:                 'Reset Password',
+        logout_button:                'Logout',
+      },
+    }),
+  };
+  for (const [key, value] of Object.entries(contactSettings)) {
+    await db.execute(
+      'INSERT IGNORE INTO site_settings (key_name, value) VALUES (?,?)',
+      [key, value]
+    );
+  }
+
   // faq table
   await db.execute(`
     CREATE TABLE IF NOT EXISTS faq (
@@ -305,7 +417,87 @@ async function initDB() {
     )
   `);
 
-  // Seed admin
+  // blogs table
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS blogs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      lang VARCHAR(10) NOT NULL,
+      title VARCHAR(500) NOT NULL,
+      slug VARCHAR(500),
+      excerpt TEXT,
+      content LONGTEXT,
+      image VARCHAR(500),
+      author VARCHAR(100),
+      tags VARCHAR(500),
+      published_at DATE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  // migration: add tags column if missing
+  const [tagsCols] = await db.execute(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='blogs' AND COLUMN_NAME='tags' AND TABLE_SCHEMA=DATABASE()`);
+  if (!tagsCols.length) await db.execute(`ALTER TABLE blogs ADD COLUMN tags VARCHAR(500)`);
+
+  // Seed default translations if missing
+  const defaultTranslations = [
+    ['en', 'successfullyAdded', 'Successfully Added'],
+    ['en', 'findUs', 'Find Us'],
+    ['en', 'logout', 'Logout'],
+    ['en', 'allCategories', 'All Categories'],
+    ['en', 'productsCount', '{n} products'],
+    ['en', 'cart.title', 'Cart'],
+    ['en', 'cart.empty', 'Cart is empty'],
+    ['en', 'cart.qty', 'Qty'],
+    ['en', 'cart.remove', 'Remove'],
+    ['en', 'cart.summary', 'Order Summary'],
+    ['en', 'cart.subtotal', 'Subtotal ({n} items)'],
+    ['en', 'cart.checkout', 'Proceed to Checkout'],
+    ['en', 'cart.clear', 'Clear Cart'],
+    ['en', 'cart.unavailable', 'These items are not available in the selected currency: {names}'],
+    ['fa', 'cart.title', 'سبد خرید'],
+    ['fa', 'cart.empty', 'سبد خرید خالی است'],
+    ['fa', 'cart.qty', 'تعداد'],
+    ['fa', 'cart.remove', 'حذف'],
+    ['fa', 'cart.summary', 'خلاصه سفارش'],
+    ['fa', 'cart.subtotal', 'جمع ({n} کالا)'],
+    ['fa', 'cart.checkout', 'ادامه و پرداخت'],
+    ['fa', 'cart.clear', 'پاک کردن سبد'],
+    ['fa', 'cart.unavailable', 'این محصولات در این ارز موجود نیستند: {names}'],
+    ['en', 'profile.title', 'Edit Profile'],
+    ['en', 'profile.firstName', 'First Name'],
+    ['en', 'profile.lastName', 'Last Name'],
+    ['en', 'profile.email', 'Email'],
+    ['en', 'profile.phone', 'Phone'],
+    ['en', 'profile.passwordHint', 'Leave password fields empty to keep current password.'],
+    ['en', 'profile.currentPassword', 'Current Password'],
+    ['en', 'profile.newPassword', 'New Password'],
+    ['en', 'profile.confirmPassword', 'Confirm New Password'],
+    ['en', 'profile.saveChanges', 'Save Changes'],
+    ['en', 'profile.saved', 'Saved'],
+    ['en', 'profile.passwordMismatch', 'New passwords do not match'],
+    ['en', 'address.saved', 'Saved Addresses'],
+    ['en', 'address.add', '+ Add'],
+    ['en', 'address.label', 'Label (e.g. Home, Work)'],
+    ['en', 'address.fullName', 'Full Name'],
+    ['en', 'address.street', 'Street Address'],
+    ['en', 'address.country', 'Country'],
+    ['en', 'address.province', 'Province'],
+    ['en', 'address.city', 'City'],
+    ['en', 'address.postal', 'Postal Code'],
+    ['en', 'address.postalZip', 'Postal / ZIP'],
+    ['en', 'address.phone', 'Phone'],
+    ['en', 'address.setDefault', 'Set as default'],
+    ['en', 'address.saveAddress', 'Save Address'],
+    ['en', 'address.cancel', 'Cancel'],
+    ['en', 'address.default', 'Default'],
+    ['en', 'address.edit', 'Edit'],
+    ['en', 'address.none', 'No saved addresses yet.'],
+  ];
+  for (const [lang, key, value] of defaultTranslations) {
+    await db.execute(
+      'INSERT INTO translations (lang, key_name, value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',
+      [lang, key, value]
+    );
+  }
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@nuttymilk.com';
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
   const [rows] = await db.execute('SELECT id FROM users WHERE email = ?', [adminEmail]);
@@ -315,18 +507,19 @@ async function initDB() {
     console.log('Admin user seeded');
   }
 
-  // Seed default language if none exist
+  // Seed default languages if none exist
   const [langs] = await db.execute('SELECT code FROM languages LIMIT 1');
   if (langs.length === 0) {
-    await db.execute("INSERT INTO languages (code, label, rtl, enabled) VALUES ('en', 'English', 0, 1)");
+    await db.execute("INSERT INTO languages (code, label, flag, rtl, enabled) VALUES ('en', 'English', '🇺🇸', 0, 1)");
     console.log('Default language (English) seeded');
   }
 
-  // Seed default currency if none exist
+  // Seed default currencies if none exist
   const [currs] = await db.execute('SELECT id FROM currencies LIMIT 1');
   if (currs.length === 0) {
-    await db.execute("INSERT INTO currencies (language_code, country, flag, currency_code, symbol, active, fraction_digits, sort_order) VALUES ('en', 'United States', '🇺🇸', 'USD', '$', 1, 2, 0)");
-    console.log('Default currency (USD) seeded');
+    await db.execute("INSERT INTO currencies (language_code, country, flag, currency_code, symbol, checkout_symbol, differ, active, fraction_digits, sort_order) VALUES ('en', 'United States', '🇺🇸', 'USD', '$', '$', 1, 1, 2, 0)");
+    await db.execute("INSERT INTO currencies (language_code, country, flag, currency_code, symbol, checkout_symbol, differ, active, fraction_digits, sort_order) VALUES ('fa', 'Iran', '🇮🇷', 'IRR', 'تومان', 'ریال', 10, 1, 0, 1)");
+    console.log('Default currencies (USD, IRR) seeded');
   }
 
   // Seed default nav links if none exist
@@ -338,6 +531,7 @@ async function initDB() {
       ['en', 'About Us', '/about', '📖', 2],
       ['en', 'Contact', '/contact', '📞', 3],
       ['en', 'FAQ', '/faq', '❓', 4],
+      ['en', 'Blog', '/blog', '📝', 5],
     ];
     for (const [lang, label, url, icon, sort] of links) {
       await db.execute("INSERT INTO nav_links (lang, label, url, icon, sort_order) VALUES (?,?,?,?,?)", [lang, label, url, icon, sort]);
@@ -348,11 +542,11 @@ async function initDB() {
   // Seed categories if none exist
   const [cats] = await db.execute('SELECT id FROM categories LIMIT 1');
   if (cats.length === 0) {
-    const [r1] = await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Plant Milks', NULL, ?)", [JSON.stringify({en:'Plant Milks'})]);
-    const [r2] = await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Nut Butters', NULL, ?)", [JSON.stringify({en:'Nut Butters'})]);
-    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Almond Milk', ?, ?)", [r1.insertId, JSON.stringify({en:'Almond Milk'})]);
-    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Oat Milk', ?, ?)", [r1.insertId, JSON.stringify({en:'Oat Milk'})]);
-    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Almond Butter', ?, ?)", [r2.insertId, JSON.stringify({en:'Almond Butter'})]);
+    const [r1] = await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Nutty Milk', NULL, ?)", [JSON.stringify({en:'Nutty Milk'})]);
+    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Saffron Pistachio Milk', ?, ?)", [r1.insertId, JSON.stringify({en:'Saffron Pistachio Milk'})]);
+    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Saffron Almond Milk', ?, ?)", [r1.insertId, JSON.stringify({en:'Saffron Almond Milk'})]);
+    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Saffron Coconut Milk', ?, ?)", [r1.insertId, JSON.stringify({en:'Saffron Coconut Milk'})]);
+    await db.execute("INSERT INTO categories (name, parent_id, names) VALUES ('Combo Box', ?, ?)", [r1.insertId, JSON.stringify({en:'Combo Box'})]);
     console.log('Default categories seeded');
   }
 
@@ -364,24 +558,115 @@ async function initDB() {
     for (const c of catRows) catMap[c.name] = c.id;
 
     const products = [
-      ['Organic Almond Milk', 'Creamy plant-based milk made from premium almonds', 50, 8.99, 'Almond Milk'],
-      ['Roasted Almond Milk', 'Bold roasted flavor with smooth finish', 45, 9.49, 'Almond Milk'],
-      ['Classic Oat Milk', 'Smooth and naturally sweet oat milk', 75, 6.49, 'Oat Milk'],
-      ['Barista Oat Milk', 'Perfect for coffee and lattes', 60, 7.99, 'Oat Milk'],
-      ['Creamy Almond Butter', 'Rich and smooth almond butter spread', 35, 12.99, 'Almond Butter'],
+      {
+        name: 'Saffron Pistachio Milk',
+        desc: 'Box of 15 sachets x 20g, rich in protein, iron and calcium. Ingredients: milk powder, saffron, cream powder, sugar, pistachio powder.',
+        stock: 50, price_usd: 12.99, cat: 'Saffron Pistachio Milk',
+      },
+      {
+        name: 'Saffron Almond Milk',
+        desc: 'Box of 15 sachets x 20g, rich in protein, iron and calcium. Ingredients: milk powder, saffron, cream powder, sugar, almond powder.',
+        stock: 45, price_usd: 12.49, cat: 'Saffron Almond Milk',
+      },
+      {
+        name: 'Saffron Coconut Milk',
+        desc: 'Box of 15 sachets x 20g, rich in protein, iron and calcium. Ingredients: milk powder, saffron, cream powder, sugar, coconut powder.',
+        stock: 60, price_usd: 11.99, cat: 'Saffron Coconut Milk',
+      },
+      {
+        name: 'Nutty Milk Combo Box (Coconut, Almond, Pistachio)',
+        desc: 'Box of 15 sachets x 20g with three flavors: coconut, almond and pistachio. Rich in protein, iron and calcium. The perfect gift.',
+        stock: 30, price_usd: 13.99, cat: 'Combo Box',
+      },
     ];
-    for (const [name, desc, stock, price, cat] of products) {
+
+    for (const p of products) {
+      const names = JSON.stringify({en: p.name});
+      const descs = JSON.stringify({en: p.desc});
       const [r] = await db.execute(
-        "INSERT INTO products (name, stock, names, descriptions, category_id) VALUES (?, ?, ?, ?, ?)",
-        [name, stock, JSON.stringify({en: name}), JSON.stringify({en: desc}), catMap[cat] || null]
+        "INSERT INTO products (name, description, names, descriptions, stock, category_id) VALUES (?,?,?,?,?,?)",
+        [p.name, p.desc, names, descs, p.stock, catMap[p.cat] || null]
       );
       await db.execute(
         "INSERT INTO product_prices (product_id, currency, price, langs) VALUES (?, 'USD', ?, ?)",
-        [r.insertId, price, JSON.stringify(['en'])]
+        [r.insertId, p.price_usd, JSON.stringify(['en'])]
       );
     }
     console.log('Sample products seeded');
   }
+
+  // Seed English FAQ if none exist
+  const [faqs] = await db.execute("SELECT id FROM faq WHERE lang='en' LIMIT 1");
+  if (faqs.length === 0) {
+    const faqItems = [
+      ['Is Nutty Milk good for health?', 'Nutty Milk is made from milk powder, saffron, cream powder, sugar, nut powders (pistachio, almond, coconut), soy lecithin and other permitted food additives. It is rich in protein, iron and calcium, making it great for health and children\'s growth. It is an excellent alternative to coffee since it is caffeine-free and milk-based.', 1],
+      ['What packaging keeps Nutty Milk fresh?', 'The best packaging for powdered foods is a 3-layer metallized plastic bag that blocks light, moisture and oxygen, extending shelf life to two years or more.', 2],
+      ['How do I identify a quality Nutty Milk?', 'Key quality indicators: proper packaging that blocks moisture, light and air; and knowing the ingredients. A milk-powder-based product has a fine flour-like texture. Our products come with the nut powder separate to prevent the natural oils from affecting the base powder over time.', 3],
+      ['What varieties are available?', 'We currently offer: Saffron Pistachio Milk, Saffron Almond Milk, Saffron Coconut Milk, and a Combo Box with all three flavors. Nut powder is packaged separately to preserve product quality.', 4],
+      ['What are the main benefits of saffron?', 'Saffron has many benefits: combating depression and boosting mood, enhancing memory and cognition, regulating sleep cycles, treating respiratory disorders, improving skin health, reducing stroke risk, cancer prevention support, preventing Alzheimer\'s, and improving eyesight.', 5],
+    ];
+    for (const [question, answer, sort] of faqItems) {
+      await db.execute("INSERT INTO faq (lang, question, answer, sort_order) VALUES ('en',?,?,?)", [question, answer, sort]);
+    }
+    console.log('English FAQ seeded');
+  }
+
+  // Seed English blogs if none exist
+  try {
+  const [blogRows] = await db.execute("SELECT id FROM blogs WHERE lang='en' LIMIT 1");
+  if (blogRows.length === 0) {
+    const blogPosts = [
+      {
+        title: 'Coconut Milk vs Coconut Water vs Nutty Milk',
+        slug: 'coconut-milk-vs-coconut-water',
+        excerpt: 'Coconut water is a natural energy drink obtained directly from the coconut.',
+        content: 'Coconut water is a natural, energizing drink that comes straight from inside a coconut. It is rich in electrolytes, potassium and natural vitamins. Coconut milk, on the other hand, is made from grated coconut flesh and has more fat and calories. Nutty Milk coconut blend is a unique combination of milk powder, saffron and coconut powder — great taste and packed with nutrients.',
+        author: 'Nutty Milk Team',
+        published_at: '2025-12-23',
+      },
+      {
+        title: 'Pistachio Milk',
+        slug: 'pistachio-milk',
+        excerpt: 'Pistachio milk is a unique blend of milk powder, saffron and pistachio powder.',
+        content: 'Pistachio Milk is one of the most popular Nutty Milk products. This delicious and nutritious drink is made from premium milk powder, pure saffron, cream powder and pistachio powder. It is rich in protein, iron, calcium and saffron antioxidants. Daily consumption supports the immune system, improves memory and boosts energy. Simply dissolve one 20g sachet in a glass of warm milk or warm water.',
+        author: 'Nutty Milk Team',
+        published_at: '2025-12-23',
+      },
+      {
+        title: 'Tips for the Perfect Saffron Pistachio Milk',
+        slug: 'tips-saffron-pistachio-milk',
+        excerpt: 'Follow these tips to prepare a perfect, professional saffron pistachio milk.',
+        content: 'Tips for the perfect saffron pistachio milk:\n\n1. Temperature: Best dissolving temperature is 60–70°C.\n2. Ratio: Dissolve one 20g sachet in 200ml warm milk or water.\n3. Stirring: Stir well until fully dissolved and smooth.\n4. Nut powder: Add pistachio powder after the base is dissolved.\n5. Serving: Enjoy hot or cold (add ice).',
+        author: 'Nutty Milk Team',
+        published_at: '2025-09-13',
+      },
+      {
+        title: 'How to Make Homemade Saffron Pistachio Milk',
+        slug: 'homemade-saffron-pistachio-milk-recipe',
+        excerpt: 'Make a delicious homemade saffron pistachio milk with this simple recipe.',
+        content: 'Ingredients:\n- 1 × 20g Nutty Milk Pistachio sachet\n- 200ml milk or water\n- Pistachio powder (included separately)\n\nInstructions:\n1. Heat milk or water to 60–70°C (do not boil).\n2. Gradually add the sachet contents to the warm liquid.\n3. Stir well with a spoon or whisk until smooth.\n4. Add pistachio powder and stir again.\n5. Pour into a cup and enjoy. A sprinkle of cinnamon is a nice touch.',
+        author: 'Nutty Milk Team',
+        published_at: '2025-09-13',
+      },
+      {
+        title: 'Saffron Quality Standards',
+        slug: 'saffron-quality-standards',
+        excerpt: 'Saffron quality is analyzed in laboratories against domestic and international standards.',
+        content: 'Saffron is one of the world\'s most expensive spices and its quality is measured by precise criteria.\n\nQuality indicators:\n- Crocin: responsible for the golden-yellow color — higher is better.\n- Picrocrocin: responsible for the bitter taste.\n- Safranal: responsible for the aroma.\n\nInternational standard ISO 3632 defines four quality grades for saffron. Iranian saffron is considered among the best in the world due to its unique climate. Nutty Milk uses Grade 1 Iranian saffron.',
+        author: 'Nutty Milk Team',
+        published_at: '2025-05-06',
+      },
+    ];
+
+    for (const post of blogPosts) {
+      await db.execute(
+        "INSERT INTO blogs (lang, title, slug, excerpt, content, author, published_at) VALUES ('en',?,?,?,?,?,?)",
+        [post.title, post.slug, post.excerpt, post.content, post.author, post.published_at]
+      );
+    }
+    console.log('English blog posts seeded');
+  }
+  } catch (e) { console.warn('Blogs seed skipped:', e.message); }
 
   return db;
 }

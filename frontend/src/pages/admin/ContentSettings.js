@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
+import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
+import 'react-tabs/style/react-tabs.css';
 import api from '../../api';
 
-const TABS = ['About Us', 'Contact Us', 'Hero Slides', 'FAQ', 'Nav Bar', 'Languages', 'Currencies', 'Trust Badges', 'Translations', 'Auth Pages'];
+const TABS = ['FAQ', 'Hero Slides', 'Nav Bar', 'Languages & Currencies', 'Trust Badges', 'Translations'];
 
 export default function ContentSettings() {
   const [tab, setTab] = useState(0);
@@ -37,16 +39,12 @@ export default function ContentSettings() {
       </div>
 
       {/* About Us */}
-      {tab === 0 && <AboutTab settings={settings} set={set} save={save} saved={saved} />}
-      {tab === 1 && <ContactTab settings={settings} set={set} save={save} saved={saved} />}
-      {tab === 2 && <SlidesTab settings={settings} set={set} save={save} saved={saved} />}
-      {tab === 3 && <FAQTab settings={settings} set={set} save={save} saved={saved} />}
-      {tab === 4 && <NavBarTab settings={settings} save={save} saved={saved} />}
-      {tab === 5 && <LanguagesTab settings={settings} set={set} save={save} saved={saved} />}
-      {tab === 6 && <CurrenciesTab />}
-      {tab === 7 && <TrustBadgesTab settings={settings} set={set} save={save} saved={saved} />}
-      {tab === 8 && <TranslationsTab />}
-      {tab === 9 && <AuthPagesTab settings={settings} save={save} saved={saved} />}
+      {tab === 0 && <FAQTab />}
+      {tab === 1 && <SlidesTab settings={settings} set={set} save={save} saved={saved} />}
+      {tab === 2 && <NavBarTab settings={settings} save={save} saved={saved} />}
+      {tab === 3 && <><LanguagesTab settings={settings} set={set} save={save} saved={saved} /><CurrenciesTab /></>}
+      {tab === 4 && <TrustBadgesTab settings={settings} set={set} save={save} saved={saved} />}
+      {tab === 5 && <TranslationsTab settings={settings} set={set} save={save} saved={saved} />}
     </div>
   );
 }
@@ -305,11 +303,20 @@ function ContactTab({ settings, set, save, saved }) {
   const [locations, setLocations] = useState([{ name: '', email: '', phone: '', address: '', hours: '', lat: '', lng: '', countries: [] }]);
   const [locSaved, setLocSaved] = useState(false);
   const [previewLang, setPreviewLang] = useState('en');
-  const [editing, setEditing] = useState(null); // 'intro' | 'title' | 'email' | 'phone' | 'address' | 'hours' | 'getInTouch' | 'sendMsg'
+  const [editing, setEditing] = useState(null);
+  const [pageContent, setPageContent] = useState({});
+  const [contentSaved, setContentSaved] = useState(false);
 
   useEffect(() => {
     api.get('/api/languages').then(r => { const l = r.data; setLangs(l); if (l[0]) setPreviewLang(l[0].code); });
     api.get('/api/currencies').then(r => setCurrencies(r.data));
+    api.get('/api/content/contact').then(r => {
+      const map = {};
+      for (const row of r.data) {
+        try { map[row.lang] = JSON.parse(row.content || '{}'); map[row.lang].title = row.title || ''; } catch { map[row.lang] = { title: row.title || '' }; }
+      }
+      setPageContent(map);
+    }).catch(() => {});
   }, []);
   useEffect(() => {
     try { const locs = JSON.parse(settings.contact_locations || '[]'); if (locs.length) setLocations(locs); } catch { }
@@ -321,6 +328,32 @@ function ContactTab({ settings, set, save, saved }) {
   const removeLoc = i => setLocations(prev => prev.filter((_, idx) => idx !== i));
   const saveLocs = () => { save('contact_locations', locations); setLocSaved(true); setTimeout(() => setLocSaved(false), 2000); };
   const saveIntro = () => save(`contact_${previewLang}`, settings[`contact_${previewLang}`]);
+
+  const pc = pageContent[previewLang] || {};
+  const updatePc = (k, v) => setPageContent(prev => ({ ...prev, [previewLang]: { ...(prev[previewLang] || {}), [k]: v } }));
+  const saveContent = async () => {
+    const data = pageContent[previewLang] || {};
+    const { title = '', ...rest } = data;
+    await api.put(`/api/content/contact/${previewLang}`, { title, content: JSON.stringify(rest) });
+    setContentSaved(true); setTimeout(() => setContentSaved(false), 2000);
+  };
+
+  const LABEL_FIELDS = [
+    { key: 'title',      label: 'Page Title',                placeholder: 'Contact Us' },
+    { key: 'touch',      label: '"Get in Touch" heading',    placeholder: 'Get in Touch' },
+    { key: 'email',      label: 'Email label',               placeholder: 'Email' },
+    { key: 'phone',      label: 'Phone label',               placeholder: 'Phone' },
+    { key: 'address',    label: 'Address label',             placeholder: 'Address' },
+    { key: 'hours',      label: 'Hours label',               placeholder: 'Hours' },
+    { key: 'sendMsg',    label: '"Send a Message" heading',  placeholder: 'Send a Message' },
+    { key: 'name',       label: 'Name placeholder',          placeholder: 'Name *' },
+    { key: 'emailField', label: 'Email placeholder',         placeholder: 'Email' },
+    { key: 'subject',    label: 'Subject placeholder',       placeholder: 'Subject' },
+    { key: 'message',    label: 'Message placeholder',       placeholder: 'Message *' },
+    { key: 'send',       label: 'Send button text',          placeholder: 'Send Message' },
+    { key: 'success',    label: 'Success message',           placeholder: '✓ Message sent!' },
+    { key: 'error',      label: 'Error message',             placeholder: 'Failed. Please try again.' },
+  ];
 
   const loc = locations[0] || {};
   const introKey = `contact_${previewLang}`;
@@ -394,6 +427,33 @@ function ContactTab({ settings, set, save, saved }) {
 
       {/* Left: location details + country visibility + map */}
       <div style={{ maxWidth: 500 }}>
+
+        {/* Language tabs + labels */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+          {langs.map(l => (
+            <button key={l.code} onClick={() => setPreviewLang(l.code)}
+              style={{ padding: '6px 14px', border: '1px solid #ddd', borderRadius: 6, background: previewLang === l.code ? '#febd69' : '#fff', cursor: 'pointer', fontWeight: previewLang === l.code ? 700 : 400, fontSize: 14 }}>
+              {l.flag} {l.label}
+            </button>
+          ))}
+        </div>
+        <div className="card" style={{ marginBottom: 16 }}>
+          <strong style={{ fontSize: 13, display: 'block', marginBottom: 10 }}>
+            {langs.find(l => l.code === previewLang)?.flag} {langs.find(l => l.code === previewLang)?.label} — Page Labels
+          </strong>
+          {LABEL_FIELDS.map(({ key, label, placeholder }) => (
+            <div key={key} style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <label style={{ marginBottom: 0, fontSize: 12, color: '#555' }}>{label}</label>
+              <input value={pc[key] || ''} dir={isRTL ? 'rtl' : 'ltr'} placeholder={placeholder}
+                onChange={e => updatePc(key, e.target.value)} style={{ marginBottom: 0 }} />
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={saveContent}>Save Labels</button>
+            {contentSaved && <span style={{ color: 'green', fontSize: 13, alignSelf: 'center' }}>✓ Saved</span>}
+          </div>
+        </div>
+
         <div style={{ marginBottom: 16 }}>
           <h3 style={{ marginBottom: 12 }}>Locations</h3>
           {locations.map((loc, i) => (
@@ -548,7 +608,7 @@ function SlidesTab({ settings, set, save, saved }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
       {/* Editor */}
-      <div style={{ maxWidth: 520 }}>
+      <div style={{ maxWidth: '100%' }}>
         {slides.map((s, i) => {
           const activeLangs = s.langs || availLangs.map(l => l.code);
           const mediaSrc = s.mediaType === 'video' && s.video
@@ -684,185 +744,170 @@ function SlidesTab({ settings, set, save, saved }) {
   );
 }
 
-function FAQTab({ settings, set, save, saved }) {
+function FAQTab() {
   const [langs, setLangs] = useState([]);
-  useEffect(() => { api.get('/api/languages').then(r => setLangs(r.data)); }, []);
+  const [activeLang, setActiveLang] = useState('');
+  const [faqs, setFaqs] = useState([]);
+  const [openIdx, setOpenIdx] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const [pageContent, setPageContent] = useState({}); // { [lang]: { title, askTitle, askSubtitle, askNamePlaceholder, askEmailPlaceholder, askMsgPlaceholder, askBtn, askSuccess } }
+  const [contentSaved, setContentSaved] = useState(false);
+  const dragIdx = useRef(null);
+
+  useEffect(() => {
+    api.get('/api/languages').then(r => {
+      setLangs(r.data);
+      if (r.data[0]) setActiveLang(r.data[0].code);
+    });
+    // Load existing page_content for faq page
+    api.get('/api/content/faq').then(r => {
+      const map = {};
+      for (const row of r.data) {
+        try { map[row.lang] = JSON.parse(row.content || '{}'); map[row.lang].title = row.title || ''; } catch { map[row.lang] = { title: row.title || '' }; }
+      }
+      setPageContent(map);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!activeLang) return;
+    setOpenIdx(null);
+    api.get(`/api/faq/${activeLang}`).then(r => setFaqs(r.data)).catch(() => setFaqs([]));
+  }, [activeLang]);
+
+  const activeLangObj = langs.find(l => l.code === activeLang);
+  const isRTL = !!activeLangObj?.rtl;
+
+  const pc = pageContent[activeLang] || {};
+  const updatePc = (k, v) => setPageContent(prev => ({ ...prev, [activeLang]: { ...(prev[activeLang] || {}), [k]: v } }));
+
+  const saveContent = async () => {
+    const data = pageContent[activeLang] || {};
+    const { title = '', ...rest } = data;
+    await api.put(`/api/content/faq/${activeLang}`, { title, content: JSON.stringify(rest) });
+    setContentSaved(true); setTimeout(() => setContentSaved(false), 2000);
+  };
+
+  const update = (i, k, v) => setFaqs(prev => { const f = [...prev]; f[i] = { ...f[i], [k]: v }; return f; });
+
+  const add = () => {
+    setFaqs(prev => { const next = [...prev, { id: null, question: '', answer: '', sort_order: prev.length + 1 }]; setOpenIdx(next.length - 1); return next; });
+  };
+
+  const remove = async (i) => {
+    const f = faqs[i];
+    if (f.id) await api.delete(`/api/faq/${f.id}`).catch(() => {});
+    setFaqs(prev => prev.filter((_, idx) => idx !== i));
+    setOpenIdx(null);
+  };
+
+  const saveAll = async () => {
+    for (let i = 0; i < faqs.length; i++) {
+      const f = faqs[i];
+      if (f.id) {
+        await api.put(`/api/faq/${f.id}`, { question: f.question, answer: f.answer, sort_order: i + 1 });
+      } else {
+        const r = await api.post('/api/faq', { lang: activeLang, question: f.question, answer: f.answer, sort_order: i + 1 });
+        setFaqs(prev => { const next = [...prev]; next[i] = { ...next[i], id: r.data.id }; return next; });
+      }
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const FIELDS = [
+    { key: 'title', label: 'Page Title', placeholder: 'FAQ' },
+    { key: 'askTitle', label: 'Ask Section — Heading', placeholder: '❓ Do you have any questions? Ask us' },
+    { key: 'askSubtitle', label: 'Ask Section — Subtitle', placeholder: 'Please read the questions above...' },
+    { key: 'askNamePlaceholder', label: 'Ask Section — Name Placeholder', placeholder: 'Full Name *' },
+    { key: 'askEmailPlaceholder', label: 'Ask Section — Email Placeholder', placeholder: 'Email *' },
+    { key: 'askMsgPlaceholder', label: 'Ask Section — Message Placeholder', placeholder: 'Your message *' },
+    { key: 'askBtn', label: 'Ask Section — Send Button', placeholder: 'Send' },
+    { key: 'askSuccess', label: 'Ask Section — Success Message', placeholder: '✓ Your message was sent. Thank you!' },
+  ];
 
   return (
-    <div style={{ width: '100%' }}>
-      {langs.map(l => {
-        const lang = l.code; const label = l.label;
-        const key = `faq_${lang}`;
-        const faqs = (() => { try { return JSON.parse(settings[key] || '[]'); } catch { return []; } })();
-        const setFaqs = v => set(key, JSON.stringify(v));
-        const update = (i, k, v) => { const f = [...faqs]; f[i] = { ...f[i], [k]: v }; setFaqs(f); };
-        const add = () => setFaqs([...faqs, { q: '', a: '' }]);
-        const remove = i => setFaqs(faqs.filter((_, idx) => idx !== i));
-        const isRTL = !!l.rtl;
+    <div>
+      {/* Language tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+        {langs.map(l => (
+          <button key={l.code} onClick={() => setActiveLang(l.code)}
+            style={{ padding: '6px 14px', border: '1px solid #ddd', borderRadius: 6, background: activeLang === l.code ? '#febd69' : '#fff', cursor: 'pointer', fontWeight: activeLang === l.code ? 700 : 400, fontSize: 14 }}>
+            {l.flag} {l.label}
+          </button>
+        ))}
+      </div>
 
-        return (
-          <div key={lang} className="card" style={{ marginBottom: 20 }}>
-            <h3 style={{ marginBottom: 12 }}>{l.flag} {label}</h3>
-            {faqs.map((f, i) => (
-              <div key={i} style={{ background: '#f9f9f9', borderRadius: 6, padding: 12, marginBottom: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <strong style={{ fontSize: 13 }}>Q{i + 1}</strong>
-                  <button className="btn btn-danger" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => remove(i)}>✕</button>
-                </div>
-                <div className="form-group"><label>Question</label>
-                  <input value={f.q} dir={isRTL ? 'rtl' : 'ltr'} onChange={e => update(i, 'q', e.target.value)} />
-                </div>
-                <div className="form-group"><label>Answer</label>
-                  <textarea rows={2} value={f.a} dir={isRTL ? 'rtl' : 'ltr'} onChange={e => update(i, 'a', e.target.value)} />
-                </div>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={add}>+ Add</button>
-              <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => save(key, faqs)}>Save {label}</button>
-              {saved === key && <span style={{ color: 'green', fontSize: 13, alignSelf: 'center' }}>✓</span>}
-            </div>
+      {/* Page title + Ask section labels */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <strong style={{ fontSize: 13, display: 'block', marginBottom: 10 }}>
+          {activeLangObj?.flag} {activeLangObj?.label} — Page Labels
+        </strong>
+        {FIELDS.map(({ key, label, placeholder }) => (
+          <div key={key} className="form-group" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <label style={{ marginBottom: 0, fontSize: 13 }}>{label}</label>
+            <input value={pc[key] || ''} dir={isRTL ? 'rtl' : 'ltr'} placeholder={placeholder}
+              onChange={e => updatePc(key, e.target.value)} style={{ marginBottom: 0 }} />
           </div>
-        );
-      })}
+        ))}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={saveContent}>Save Labels</button>
+          {contentSaved && <span style={{ color: 'green', fontSize: 13, alignSelf: 'center' }}>✓ Saved</span>}
+        </div>
+      </div>
+
+      {/* FAQ items */}
+      {faqs.map((f, i) => (
+        <div key={i}
+          draggable
+          onDragStart={() => { dragIdx.current = i; }}
+          onDragOver={e => e.preventDefault()}
+          onDrop={() => {
+            const from = dragIdx.current;
+            if (from === null || from === i) return;
+            setFaqs(prev => {
+              const next = [...prev];
+              const [moved] = next.splice(from, 1);
+              next.splice(i, 0, moved);
+              return next;
+            });
+            setOpenIdx(null);
+            dragIdx.current = null;
+          }}
+          style={{ background: '#f9f9f9', borderRadius: 6, marginBottom: 6, border: '1px solid #e8e8e8', cursor: 'grab' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px' }}
+            onClick={() => setOpenIdx(openIdx === i ? null : i)}>
+            <span style={{ color: '#bbb', fontSize: 16, userSelect: 'none', flexShrink: 0 }}>⠿</span>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: f.question ? '#222' : '#bbb', direction: isRTL ? 'rtl' : 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {f.question || `Q${i + 1} — click to edit`}
+            </span>
+            <span style={{ fontSize: 12, color: '#aaa', flexShrink: 0 }}>{openIdx === i ? '▲' : '▼'}</span>
+            <button className="btn btn-danger" style={{ padding: '2px 8px', fontSize: 12, flexShrink: 0 }}
+              onClick={e => { e.stopPropagation(); remove(i); }}>✕</button>
+          </div>
+          {openIdx === i && (
+            <div style={{ padding: '0 12px 12px 12px', borderTop: '1px solid #e8e8e8' }} onClick={e => e.stopPropagation()}>
+              <div className="form-group" style={{ marginTop: 10 }}>
+                <label>Question</label>
+                <input value={f.question} dir={isRTL ? 'rtl' : 'ltr'} onChange={e => update(i, 'question', e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Answer</label>
+                <textarea rows={3} value={f.answer} dir={isRTL ? 'rtl' : 'ltr'} onChange={e => update(i, 'answer', e.target.value)} />
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={add}>+ Add</button>
+        <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={saveAll}>Save FAQs</button>
+        {saved && <span style={{ color: 'green', fontSize: 13, alignSelf: 'center' }}>✓ Saved</span>}
+      </div>
     </div>
   );
 }
-
-// function PageTitlesTab({ settings, set, save, saved }) {
-//   const [langs, setLangs] = useState([]);
-//   const [rows, setRows] = useState([]); // [{lang, faq, about, contact}]
-//   const [pageSaved, setPageSaved] = useState(false);
-
-//   const pages = ['title', 'home', 'products', 'faq', 'about', 'contact', 'orders', 'profile'];
-//   const DEFAULT_ICONS = { title: '🥛', home: '🏠', products: '🛍️', faq: '❓', about: 'ℹ️', contact: '📞', orders: '📦', profile: '👤' };
-//   const [icons, setIcons] = useState(DEFAULT_ICONS);
-
-//   useEffect(() => {
-//     api.get('/api/languages').then(r => setLangs(r.data));
-//   }, []);
-
-//   useEffect(() => {
-//     const titles = (() => { try { return JSON.parse(settings.page_titles || '{}'); } catch { return {}; } })();
-//     if (titles._icons) setIcons(prev => ({ ...prev, ...titles._icons }));
-//     const usedLangs = new Set();
-//     pages.forEach(p => Object.keys(titles[p] || {}).forEach(l => usedLangs.add(l)));
-//     const built = [...usedLangs].map(lang => {
-//       const row = { lang };
-//       pages.forEach(p => row[p] = titles[p]?.[lang] || '');
-//       return row;
-//     });
-//     setRows(built);
-//   }, [settings.page_titles]);
-
-//   const usedLangs = rows.map(r => r.lang);
-//   const availableLangs = langs.filter(l => !usedLangs.includes(l.code));
-
-//   const updateRow = (i, k, v) => setRows(prev => { const r = [...prev]; r[i] = { ...r[i], [k]: v }; return r; });
-//   const addRow = () => {
-//     const next = availableLangs[0];
-//     if (!next) return;
-//     setRows(prev => [...prev, { lang: next.code, faq: '', about: '', contact: '' }]);
-//   };
-//   const removeRow = i => {
-//     const newRows = rows.filter((_, idx) => idx !== i);
-//     setRows(newRows);
-//     const titles = { _icons: icons };
-//     pages.forEach(p => {
-//       titles[p] = {};
-//       newRows.forEach(r => { if (r.lang) titles[p][r.lang] = r[p] || ''; });
-//     });
-//     save('page_titles', titles);
-//   };
-
-//   const buildTitles = (onlyLang = null) => {
-//     const titles = { _icons: icons };
-//     pages.forEach(p => {
-//       titles[p] = {};
-//       rows.forEach(r => { if (r.lang && (!onlyLang || r.lang === onlyLang)) titles[p][r.lang] = r[p] || ''; });
-//     });
-//     return titles;
-//   };
-
-//   const saveAll = () => {
-//     const requiredLangs = langs.map(l => l.code);
-//     for (const lang of requiredLangs) {
-//       const row = rows.find(r => r.lang === lang);
-//       if (!row) { alert(`Please add a row for language "${lang}" and fill all columns before saving.`); return; }
-//       const missing = pages.filter(p => !row[p]?.trim());
-//       if (missing.length > 0) { alert(`Please fill all columns for "${lang}": missing ${missing.join(', ')}.`); return; }
-//     }
-//     save('page_titles', buildTitles());
-//     setPageSaved(true); setTimeout(() => setPageSaved(false), 2000);
-//   };
-
-//   const saveRow = (row) => {
-//     const missing = pages.filter(p => !row[p]?.trim());
-//     if (missing.length > 0) { alert(`Please fill all columns for "${row.lang}": missing ${missing.join(', ')}.`); return; }
-//     // Merge current row into the full titles object built from all rows
-//     save('page_titles', buildTitles());
-//     setPageSaved(row.lang); setTimeout(() => setPageSaved(false), 2000);
-//   };
-
-//   return (
-//     <div className="card" style={{ maxWidth: 1150 }}>
-//       <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Set page titles per language. Each language can only appear once.</p>
-//       <table style={{ marginBottom: 12, tableLayout: 'fixed', width: '100%' }}>
-//         <thead>
-//           <tr>
-//             <th style={{ width: '12%' }}>Language</th>
-//             {pages.map(p => <th key={p} style={{ width: `${80 / pages.length}%`, textTransform: 'capitalize' }}>{p}</th>)}
-//             <th style={{ width: 100 }}></th>
-//           </tr>
-//         </thead>
-//         <tbody>
-//           <tr style={{ background: '#fffbe6' }}>
-//             <td style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Icons</td>
-//             {pages.map(p => (
-//               <td key={p}>
-//                 <input value={icons[p] || ''} onChange={e => setIcons(ic => ({ ...ic, [p]: e.target.value }))}
-//                   placeholder="emoji" style={{ marginBottom: 0, textAlign: 'center', fontSize: 18 }} maxLength={4} />
-//               </td>
-//             ))}
-//             <td>
-//               <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 12 }}
-//                 onClick={() => save('page_titles', buildTitles())}>Save</button>
-//             </td>
-//           </tr>
-//           {rows.map((row, i) => {
-//             const isRTL = ['fa', 'ar'].includes(row.lang);
-//             const langInfo = langs.find(l => l.code === row.lang);
-//             return (
-//               <tr key={i}>
-//                 <td>
-//                   <select value={row.lang} onChange={e => updateRow(i, 'lang', e.target.value)} style={{ marginBottom: 0, width: '100%' }}>
-//                     <option value={row.lang}>{langInfo?.flag} {langInfo?.label || row.lang}</option>
-//                     {availableLangs.map(l => <option key={l.code} value={l.code}>{l.flag} {l.label}</option>)}
-//                   </select>
-//                 </td>
-//                 {pages.map(p => (
-//                   <td key={p}>
-//                     <input value={row[p] || ''} dir={isRTL ? 'rtl' : 'ltr'} onChange={e => updateRow(i, p, e.target.value)} style={{ marginBottom: 0 }} />
-//                   </td>
-//                 ))}
-//                 <td style={{ whiteSpace: 'nowrap' }}>
-//                   <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 12, marginRight: 4 }} onClick={() => saveRow(row)}>
-//                     {pageSaved === row.lang ? '\u2713' : 'Save'}
-//                   </button>
-//                   <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removeRow(i)}>&times;</button>
-//                 </td>
-//               </tr>
-//             );
-//           })}
-//         </tbody>
-//       </table>
-//       <div style={{ display: 'flex', gap: 8 }}>
-//         <button className="btn btn-secondary" onClick={addRow} disabled={availableLangs.length === 0}>+ Add Language</button>
-//         {pageSaved === true && <span style={{ color: 'green', fontSize: 13, alignSelf: 'center' }}>&check; All Saved</span>}
-//       </div>
-//     </div>
-//   );
-// }
 
 const NAV_ICONS = ['🏠', '🛍️', '📦', '👤', '❓', 'ℹ️', '📞', '⭐', '🔥', '🎁', '💳', '🚚', '📋', '🔑', '💬', '🌐', '📸', '🎉', '🏷️', '❤️', '🔔', '📌', '🗂️', '⚙️', '🛒'];
 
@@ -907,6 +952,7 @@ const APP_PAGES = [
   { url: '/about',     label: 'ℹ️ About Us' },
   { url: '/contact',   label: '📞 Contact Us' },
   { url: '/faq',       label: '❓ FAQ' },
+  { url: '/blog',      label: '📝 Blog' },
   { url: '/login',     label: '🔑 Login' },
   { url: '/register',  label: '📝 Register' },
 ];
@@ -972,9 +1018,6 @@ function NavIconPicker({ value, onChange }) {
 
 function HomeTabLabels({ langs, activeLang, saveSetting, settings }) {
   const TABS_DEF = {
-    // all:   { en: 'All Products',  fa: 'همه محصولات',      ar: 'جميع المنتجات' },
-    // new:   { en: 'New Arrivals',  fa: 'جدیدترین‌ها',      ar: 'الوافدون الجدد' },
-    // deals: { en: 'Best Deals',    fa: 'بهترین تخفیف‌ها',  ar: 'أفضل العروض' },
     all:   {  },
     new:   {  },
     deals: { },
@@ -1057,52 +1100,7 @@ function NavBarTab({ settings, save: saveSetting }) {
     await api.put(`/api/navlinks/${activeLang}`, links.map((l, i) => ({ ...l, sort_order: i + 1 })));
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   };
-    // ── Button labels ──────────────────────────────────────────────────────────
-  const BUTTONS = ['addToCart', 'buyNow', 'shopNow', 'login', 'register', 'logout', 'save', 'cancel', 'search', 'back', 'placeOrder', 'continueShopping', 'viewOrders'];
-  const BTN_LABEL_DEFAULTS = {
-    addToCart: { en: 'Add to Cart', fa: '\u0627\u0641\u0632\u0648\u062f\u0646 \u0628\u0647 \u0633\u0628\u062f', ar: '\u0623\u0636\u0641 \u0644\u0644\u0633\u0644\u0629' },
-    buyNow: { en: 'Buy Now', fa: '\u062e\u0631\u06cc\u062f \u0641\u0648\u0631\u06cc', ar: '\u0627\u0634\u062a\u0631 \u0627\u0644\u0622\u0646' },
-    shopNow: { en: 'Shop Now', fa: '\u062e\u0631\u06cc\u062f \u06a9\u0646\u06cc\u062f', ar: '\u062a\u0633\u0648\u0642 \u0627\u0644\u0622\u0646' },
-    login: { en: 'Login', fa: '\u0648\u0631\u0648\u062f', ar: '\u062a\u0633\u062c\u06cc\u0644 \u0627\u0644\u062f\u062e\u0648\u0644' },
-    register: { en: 'Register', fa: '\u062b\u0628\u062a\u200c\u0646\u0627\u0645', ar: '\u0625\u0646\u0634\u0627\u0621 \u062d\u0633\u0627\u0628' },
-    logout: { en: 'Logout', fa: '\u062e\u0631\u0648\u062c', ar: '\u062e\u0631\u0648\u062c' },
-    save: { en: 'Save', fa: '\u0630\u062e\u06cc\u0631\u0647', ar: '\u062d\u0641\u0638' },
-    cancel: { en: 'Cancel', fa: '\u0627\u0646\u0635\u0631\u0627\u0641', ar: '\u0625\u0644\u063a\u0627\u0621' },
-    search: { en: 'Search', fa: '\u062c\u0633\u062a\u062c\u0648', ar: '\u0628\u062d\u062b' },
-    back: { en: 'Back', fa: '\u0628\u0627\u0632\u06af\u0634\u062a', ar: '\u0631\u062c\u0648\u0639' },
-    placeOrder: { en: 'Place Order', fa: '\u062b\u0628\u062a \u0633\u0641\u0627\u0631\u0634', ar: '\u062a\u0642\u062f\u06cc\u0645 \u0627\u0644\u0637\u0644\u0628' },
-    continueShopping: { en: 'Continue Shopping', fa: '\u0627\u062f\u0627\u0645\u0647 \u062e\u0631\u06cc\u062f', ar: '\u0645\u0648\u0627\u0635\u0644\u0629 \u0627\u0644\u062a\u0633\u0648\u0642' },
-    viewOrders: { en: 'View Orders', fa: '\u0633\u0641\u0627\u0631\u0634\u200c\u0647\u0627', ar: '\u0637\u0644\u0628\u0627\u062a\u06cc' },
-  };
-  const BTN_COLOR_DEFAULTS = {
-    addToCart: '#febd69', buyNow: '#f90', shopNow: '#f90', login: '#232f3e', register: '#232f3e',
-    logout: '#c0392b', save: '#27ae60', cancel: '#888888', search: '#232f3e', back: '#888888',
-    placeOrder: '#27ae60', continueShopping: '#232f3e', viewOrders: '#232f3e',
-  };
-  const [btnData, setBtnData] = useState({});
-  const [btnSaved, setBtnSaved] = useState(false);
-
-  useEffect(() => {
-    const stored = (() => { try { return JSON.parse(settings.button_labels || '{}'); } catch { return {}; } })();
-    const data = {};
-    BUTTONS.forEach(b => {
-      data[b] = {
-        color: stored[b]?.color || BTN_COLOR_DEFAULTS[b] || '#232f3e',
-        labels: {},
-      };
-      langs.forEach(l => {
-        data[b].labels[l.code] = stored[b]?.labels?.[l.code] ?? BTN_LABEL_DEFAULTS[b]?.[l.code] ?? '';
-      });
-    });
-    setBtnData(data);
-  }, [settings.button_labels, langs]);
-
-  const updateBtnColor = (b, color) => setBtnData(prev => ({ ...prev, [b]: { ...prev[b], color } }));
-  const updateBtnLabel = (b, lang, val) => setBtnData(prev => ({ ...prev, [b]: { ...prev[b], labels: { ...prev[b].labels, [lang]: val } } }));
-  const saveBtnRows = () => {
-    saveSetting('button_labels', JSON.stringify(btnData));
-    setBtnSaved(true); setTimeout(() => setBtnSaved(false), 2000);
-  };
+    // ── (Button labels moved to Translations tab) ─────────────────────────────
 
   return (
     <div style={{ maxWidth: 600 }}>
@@ -1181,33 +1179,6 @@ function NavBarTab({ settings, save: saveSetting }) {
       <h3 style={{ marginTop: 32, marginBottom: 8 }}>Home Page Tab Labels</h3>
       <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>Set the tab names shown on the home page per language.</p>
       <HomeTabLabels langs={langs} activeLang={activeLang} saveSetting={saveSetting} settings={settings} />
-
-      {/* Button Labels */}
-      <h3 style={{ marginTop: 32, marginBottom: 8 }}>Button Labels</h3>
-      <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>Set label and color for each button per language.</p>
-      <div className="card">
-        {BUTTONS.map(b => {
-          const activeLangObj = langs.find(l => l.code === activeLang);
-          return (
-            <div key={b} style={{ display: 'grid', gridTemplateColumns: '140px 44px 110px 1fr', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, fontSize: 12, color: '#555' }}>{b}</span>
-              <input type="color" value={btnData[b]?.color || '#232f3e'}
-                onChange={e => updateBtnColor(b, e.target.value)}
-                style={{ width: 40, height: 32, border: 'none', padding: 0, cursor: 'pointer', background: 'none' }} />
-              <span style={{ background: btnData[b]?.color || '#232f3e', color: '#fff', padding: '3px 10px', borderRadius: 4, fontSize: 12, whiteSpace: 'nowrap', textAlign: 'center' }}>
-                {btnData[b]?.labels?.[activeLang] || b}
-              </span>
-              <input value={btnData[b]?.labels?.[activeLang] || ''} dir={activeLangObj?.rtl ? 'rtl' : 'ltr'}
-                onChange={e => updateBtnLabel(b, activeLang, e.target.value)}
-                style={{ marginBottom: 0 }} />
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button className="btn btn-primary" onClick={saveBtnRows}>Save Button Labels</button>
-        {btnSaved && <span style={{ color: 'green', fontSize: 13, alignSelf: 'center' }}>&check; Saved</span>}
-      </div>
     </div>
   );
 }
@@ -1242,8 +1213,12 @@ function LanguagesTab({ settings, set, save }) {
     setLangs(prev => prev.filter((_, idx) => idx !== i));
   };
   const saveAll = async () => {
-    await api.put('/api/languages', langs.filter(l => l.code));
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
+    try {
+      await api.put('/api/languages', langs.filter(l => l.code));
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      alert('Save failed: ' + (err.response?.data?.error || err.message));
+    }
   };
 
   return (
@@ -1300,28 +1275,34 @@ function CurrenciesTab() {
   }, []);
 
   const update = (i, k, v) => setCurrencies(prev => { const c = [...prev]; c[i] = { ...c[i], [k]: v }; return c; });
-  const add = () => setCurrencies(prev => [...prev, { language_code: langs[0]?.code || 'en', country: '', flag: '', currency_code: '', symbol: '', active: true }]);
+  const add = () => setCurrencies(prev => [...prev, { language_code: langs[0]?.code || 'en', country: '', flag: '', currency_code: '', symbol: '', checkout_symbol: '', differ: 1, active: true }]);
   const remove = i => setCurrencies(prev => prev.filter((_, idx) => idx !== i));
   const saveAll = async () => {
-    await api.put('/api/currencies', currencies.filter(c => c.currency_code));
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
+    try {
+      await api.put('/api/currencies', currencies.filter(c => c.currency_code));
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      alert('Save failed: ' + (err.response?.data?.error || err.message));
+    }
   };
 
   return (
     <div className="card" style={{ maxWidth: 860 }}>
       <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Define currencies per language. Active currencies appear in the top bar and as price filters in products.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 70px 90px 70px 50px 60px auto', gap: 6, marginBottom: 6 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 70px 90px 70px 70px 80px 50px 60px auto', gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 12, color: '#888' }}>Language</span>
         <span style={{ fontSize: 12, color: '#888' }}>Country</span>
         <span style={{ fontSize: 12, color: '#888' }}>Flag</span>
         <span style={{ fontSize: 12, color: '#888' }}>Currency</span>
         <span style={{ fontSize: 12, color: '#888' }}>Symbol</span>
+        <span style={{ fontSize: 12, color: '#888' }}>Checkout Symbol</span>
+        <span style={{ fontSize: 12, color: '#888' }}>Differ (Checkout Symbol)/(Symbol)</span>
         <span style={{ fontSize: 12, color: '#888', textAlign: 'center' }}>Dec.</span>
         <span style={{ fontSize: 12, color: '#888', textAlign: 'center' }}>Active</span>
         <span />
       </div>
       {currencies.map((c, i) => (
-        <div key={i} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 70px 90px 70px 50px 60px auto', gap: 6, marginBottom: 8, alignItems: 'center' }}>
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 70px 90px 70px 70px 80px 50px 60px auto', gap: 6, marginBottom: 8, alignItems: 'center' }}>
           <select value={c.language_code} onChange={e => update(i, 'language_code', e.target.value)} style={{ marginBottom: 0 }}>
             {langs.map(l => <option key={l.code} value={l.code}>{l.flag} {l.label}</option>)}
           </select>
@@ -1346,8 +1327,11 @@ function CurrenciesTab() {
           </div>
           <input value={c.currency_code} onChange={e => update(i, 'currency_code', e.target.value.toUpperCase())} placeholder="USD" style={{ marginBottom: 0 }} maxLength={10} />
           <input value={c.symbol} onChange={e => update(i, 'symbol', e.target.value)} placeholder="$" style={{ marginBottom: 0 }} maxLength={10} />
+          <input value={c.checkout_symbol ?? c.symbol} onChange={e => update(i, 'checkout_symbol', e.target.value)} placeholder="$" style={{ marginBottom: 0 }} maxLength={20} />
+          <input type="number" value={c.differ ? Math.round(c.differ) : 1} onChange={e => update(i, 'differ', Number(e.target.value))}
+            min={0} title="Differ" style={{ marginBottom: 0, textAlign: 'center' }} />
           <input type="number" value={c.fraction_digits ?? 2} onChange={e => update(i, 'fraction_digits', Number(e.target.value))}
-            min={0} max={6} title="Decimal places" style={{ marginBottom: 0, textAlign: 'center' }} />
+            min={0} max={3} title="Decimal places" style={{ marginBottom: 0, textAlign: 'center' }} />
           <div style={{ textAlign: 'center' }}>
             <input type="checkbox" checked={!!c.active} onChange={() => update(i, 'active', !c.active)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
           </div>
@@ -1466,13 +1450,105 @@ function TrustBadgesTab({ settings, set, save, saved }) {
 }
 
 
-function TranslationsTab() {
+function TranslationsTab({ settings, set, save, saved: savedProp }) {
+  const saveSetting = save;
   const [langs, setLangs] = useState([]);
   const [selectedLang, setSelectedLang] = useState('en');
   const [translations, setTranslations] = useState({});
   const [saved, setSaved] = useState(false);
 
-  const KEYS = ['successfullyAdded'];
+  const KEYS = [
+    { key: 'successfullyAdded', defaults: { en: 'Successfully Added' } },
+    { key: 'findUs',            defaults: { en: 'Find Us' } },
+    { key: 'logout',            defaults: { en: 'Logout' } },
+    { key: 'allCategories',     defaults: { en: 'All Categories' } },
+    { key: 'productsCount',     defaults: { en: '{n} products' } },
+  ];
+
+  const UI_LABEL_TABS = [
+    { id: 'cart', label: '🛒 Cart', keys: [
+      { key: 'cart.title',    defaults: { en: 'Cart' } },
+      { key: 'cart.empty',    defaults: { en: 'Cart is empty' } },
+      { key: 'cart.qty',      defaults: { en: 'Qty' } },
+      { key: 'cart.remove',   defaults: { en: 'Remove' } },
+      { key: 'cart.summary',  defaults: { en: 'Order Summary' } },
+      { key: 'cart.subtotal', defaults: { en: 'Subtotal ({n} items)' } },
+      { key: 'cart.checkout', defaults: { en: 'Proceed to Checkout' } },
+      { key: 'cart.clear',    defaults: { en: 'Clear Cart' } },
+    ]},
+    { id: 'profile', label: '👤 Profile', keys: [
+      { key: 'profile.title',           defaults: { en: 'Edit Profile' } },
+      { key: 'profile.firstName',       defaults: { en: 'First Name' } },
+      { key: 'profile.lastName',        defaults: { en: 'Last Name' } },
+      { key: 'profile.email',           defaults: { en: 'Email' } },
+      { key: 'profile.phone',           defaults: { en: 'Phone' } },
+      { key: 'profile.passwordHint',    defaults: { en: 'Leave password fields empty to keep current password.' } },
+      { key: 'profile.currentPassword', defaults: { en: 'Current Password' } },
+      { key: 'profile.newPassword',     defaults: { en: 'New Password' } },
+      { key: 'profile.confirmPassword', defaults: { en: 'Confirm New Password' } },
+      { key: 'profile.saveChanges',     defaults: { en: 'Save Changes' } },
+      { key: 'profile.saved',           defaults: { en: 'Saved' } },
+      { key: 'profile.passwordMismatch',defaults: { en: 'New passwords do not match' } },
+    ]},
+    { id: 'address', label: '📍 Address', keys: [
+      { key: 'address.saved',      defaults: { en: 'Saved Addresses' } },
+      { key: 'address.add',        defaults: { en: '+ Add' } },
+      { key: 'address.label',      defaults: { en: 'Label (e.g. Home, Work)' } },
+      { key: 'address.fullName',   defaults: { en: 'Full Name' } },
+      { key: 'address.street',     defaults: { en: 'Street Address' } },
+      { key: 'address.country',    defaults: { en: 'Country' } },
+      { key: 'address.province',   defaults: { en: 'Province' } },
+      { key: 'address.city',       defaults: { en: 'City' } },
+      { key: 'address.postal',     defaults: { en: 'Postal Code' } },
+      { key: 'address.postalZip',  defaults: { en: 'Postal / ZIP' } },
+      { key: 'address.phone',      defaults: { en: 'Phone' } },
+      { key: 'address.setDefault', defaults: { en: 'Set as default' } },
+      { key: 'address.saveAddress',defaults: { en: 'Save Address' } },
+      { key: 'address.cancel',     defaults: { en: 'Cancel' } },
+      { key: 'address.default',    defaults: { en: 'Default' } },
+      { key: 'address.edit',       defaults: { en: 'Edit' } },
+      { key: 'address.none',       defaults: { en: 'No saved addresses yet.' } },
+    ]},
+  ];
+
+  // ── Button labels ───────────────────────────────────────────────────────────
+  const BUTTONS = ['addToCart', 'buyNow', 'shopNow', 'login', 'register', 'logout', 'save', 'cancel', 'search', 'back', 'placeOrder', 'continueShopping', 'viewOrders'];
+  const BTN_LABEL_DEFAULTS = {
+    addToCart: { en: 'Add to Cart' },
+    buyNow: { en: 'Buy Now' },
+    shopNow: { en: 'Shop Now' },
+    login: { en: 'Login' },
+    register: { en: 'Register' },
+    logout: { en: 'Logout' },
+    save: { en: 'Save' },
+    cancel: { en: 'Cancel' },
+    search: { en: 'Search' },
+    back: { en: 'Back' },
+    placeOrder: { en: 'Place Order' },
+    continueShopping: { en: 'Continue Shopping' },
+    viewOrders: { en: 'View Orders' },
+  };
+  const BTN_COLOR_DEFAULTS = {
+    addToCart: '#febd69', buyNow: '#f90', shopNow: '#f90', login: '#232f3e', register: '#232f3e',
+    logout: '#c0392b', save: '#27ae60', cancel: '#888888', search: '#232f3e', back: '#888888',
+    placeOrder: '#27ae60', continueShopping: '#232f3e', viewOrders: '#232f3e',
+  };
+  const [btnData, setBtnData] = useState({});
+  const [btnSaved, setBtnSaved] = useState(false);
+
+  useEffect(() => {
+    const stored = (() => { try { return JSON.parse(settings?.button_labels || '{}'); } catch { return {}; } })();
+    const data = {};
+    BUTTONS.forEach(b => {
+      data[b] = { color: stored[b]?.color || BTN_COLOR_DEFAULTS[b] || '#232f3e', labels: {} };
+      langs.forEach(l => { data[b].labels[l.code] = stored[b]?.labels?.[l.code] ?? BTN_LABEL_DEFAULTS[b]?.[l.code] ?? ''; });
+    });
+    setBtnData(data);
+  }, [settings?.button_labels, langs]); // eslint-disable-line
+
+  const updateBtnColor = (b, color) => setBtnData(prev => ({ ...prev, [b]: { ...prev[b], color } }));
+  const updateBtnLabel = (b, lang, val) => setBtnData(prev => ({ ...prev, [b]: { ...prev[b], labels: { ...prev[b].labels, [lang]: val } } }));
+  const saveBtnRows = () => { saveSetting('button_labels', JSON.stringify(btnData)); setBtnSaved(true); setTimeout(() => setBtnSaved(false), 2000); };
 
   useEffect(() => {
     api.get('/api/languages').then(r => {
@@ -1498,12 +1574,98 @@ function TranslationsTab() {
 
   const activeLangObj = langs.find(l => l.code === selectedLang);
 
-  return (
-    <div className="card">
-      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
-        Manage translatable messages shown to users. Add translations for each enabled language.
-      </p>
+  // FAQ page labels (stored in page_content)
+  const [faqContent, setFaqContent] = useState({});
+  const [faqSaved, setFaqSaved] = useState(false);
+  useEffect(() => {
+    api.get('/api/content/faq').then(r => {
+      const map = {};
+      for (const row of r.data) {
+        try { map[row.lang] = JSON.parse(row.content || '{}'); map[row.lang].title = row.title || ''; } catch { map[row.lang] = { title: row.title || '' }; }
+      }
+      setFaqContent(map);
+    }).catch(() => {});
+  }, []);
+  const faqPc = faqContent[selectedLang] || {};
+  const updateFaqPc = (k, v) => setFaqContent(prev => ({ ...prev, [selectedLang]: { ...(prev[selectedLang] || {}), [k]: v } }));
+  const saveFaqContent = async () => {
+    const data = faqContent[selectedLang] || {};
+    const { title = '', ...rest } = data;
+    await api.put(`/api/content/faq/${selectedLang}`, { title, content: JSON.stringify(rest) });
+    setFaqSaved(true); setTimeout(() => setFaqSaved(false), 2000);
+  };
 
+  const FAQ_LABEL_FIELDS = [
+    { key: 'title',               label: 'Page Title',                 placeholder: 'FAQ' },
+    { key: 'askTitle',            label: 'Ask Section — Heading',      placeholder: '❓ Do you have any questions? Ask us' },
+    { key: 'askSubtitle',         label: 'Ask Section — Subtitle',     placeholder: 'Please read the questions above...' },
+    { key: 'askNamePlaceholder',  label: 'Name field placeholder',     placeholder: 'Full Name *' },
+    { key: 'askEmailPlaceholder', label: 'Email field placeholder',    placeholder: 'Email *' },
+    { key: 'askMsgPlaceholder',   label: 'Message field placeholder',  placeholder: 'Your message *' },
+    { key: 'askBtn',              label: 'Send button text',           placeholder: 'Send' },
+    { key: 'askSuccess',          label: 'Success message',            placeholder: '✓ Your message was sent. Thank you!' },
+  ];
+
+  // Checkout page labels
+  const [checkoutContent, setCheckoutContent] = useState({});
+  const [checkoutSaved, setCheckoutSaved] = useState(false);
+  useEffect(() => {
+    api.get('/api/content/checkout').then(r => {
+      const map = {};
+      for (const row of r.data) {
+        try { map[row.lang] = JSON.parse(row.content || '{}'); } catch { map[row.lang] = {}; }
+      }
+      setCheckoutContent(map);
+    }).catch(() => {});
+  }, []);
+  const checkoutPc = checkoutContent[selectedLang] || {};
+  const updateCheckoutPc = (k, v) => setCheckoutContent(prev => ({ ...prev, [selectedLang]: { ...(prev[selectedLang] || {}), [k]: v } }));
+  const saveCheckoutContent = async () => {
+    await api.put(`/api/content/checkout/${selectedLang}`, { title: '', content: JSON.stringify(checkoutContent[selectedLang] || {}) });
+    setCheckoutSaved(true); setTimeout(() => setCheckoutSaved(false), 2000);
+  };
+
+  const CHECKOUT_LABEL_FIELDS = [
+    { key: 'stepAddress',     placeholder: 'Address' },
+    { key: 'stepPayment',     placeholder: 'Payment' },
+    { key: 'stepConfirm',     placeholder: 'Confirmation' },
+    { key: 'shippingAddress', placeholder: 'Shipping Address' },
+    { key: 'fullName',        placeholder: 'Full Name' },
+    { key: 'street',          placeholder: 'Street Address' },
+    { key: 'city',            placeholder: 'City' },
+    { key: 'province',        placeholder: 'Province' },
+    { key: 'country',         placeholder: 'Country' },
+    { key: 'postal',          placeholder: 'Postal / ZIP' },
+    { key: 'postalIran',      placeholder: 'Postal Code (10 digits)' },
+    { key: 'phone',           placeholder: 'Phone' },
+    { key: 'shippingMethod',  placeholder: 'Shipping Method' },
+    { key: 'notes',           placeholder: 'Order Notes' },
+    { key: 'notesPlaceholder',placeholder: 'e.g. Leave at door' },
+    { key: 'optional',        placeholder: 'optional' },
+    { key: 'continue',        placeholder: 'Continue to Payment →' },
+    { key: 'fetchingRates',   placeholder: 'Fetching shipping rates...' },
+    { key: 'selectProvince',  placeholder: 'Select province...' },
+    { key: 'free',            placeholder: 'Free' },
+    { key: 'days',            placeholder: 'days' },
+    { key: 'orderSummary',    placeholder: 'Order Summary' },
+    { key: 'shipping',        placeholder: 'Shipping' },
+    { key: 'total',           placeholder: 'Total' },
+    { key: 'paymentMethod',   placeholder: 'Payment Method' },
+    { key: 'cardNumber',      placeholder: 'Card Number' },
+    { key: 'nameOnCard',      placeholder: 'Name on Card' },
+    { key: 'expiry',          placeholder: 'Expiry (MM/YY)' },
+    { key: 'cvv',             placeholder: 'CVV' },
+    { key: 'cardNote',        placeholder: '🔒 Demo — no real payment processed.' },
+    { key: 'codNote',         placeholder: '💵 Pay with cash when your order is delivered.' },
+    { key: 'placing',         placeholder: 'Placing order...' },
+    { key: 'orderPlaced',     placeholder: 'Order Placed!' },
+    { key: 'orderNumber',     placeholder: 'Order' },
+  ];
+
+  const [uiTab, setUiTab] = useState(0);
+
+  return (<>
+    <div className="card shadow mb-4">
       <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
         {langs.map(l => (
           <button key={l.code} onClick={() => setSelectedLang(l.code)}
@@ -1512,37 +1674,153 @@ function TranslationsTab() {
           </button>
         ))}
       </div>
-
-      <table style={{ width: '100%', marginBottom: 16 }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'left', width: '30%' }}>Key</th>
-            <th style={{ textAlign: 'left' }}>Translation</th>
-          </tr>
-        </thead>
-        <tbody>
-          {KEYS.map(key => (
-            <tr key={key}>
-              <td style={{ padding: '8px 0', fontFamily: 'monospace', fontSize: 13, color: '#555' }}>{key}</td>
-              <td style={{ padding: '8px 0' }}>
-                <input
-                  value={translations[key] || ''}
-                  onChange={e => update(key, e.target.value)}
-                  placeholder=""
-                  style={{ marginBottom: 0, width: '100%' }}
-                  dir={activeLangObj?.rtl ? 'rtl' : 'ltr'}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button className="btn btn-primary" onClick={saveAll}>Save</button>
-        {saved && <span style={{ color: 'green', fontSize: 13 }}>✓ Saved</span>}
-      </div>
-    </div>
+        <Tabs>
+          <TabList>
+            <Tab>About Us</Tab>
+            <Tab>Contact Us</Tab>
+            <Tab>Auth</Tab>
+            <Tab>Buttons</Tab>
+            <Tab>UI Labels</Tab>
+            <Tab>FAQ Page</Tab>
+            <Tab>Checkout</Tab>
+          </TabList>
+          <TabPanel>
+            <ContactTab settings={settings} set={set} save={save} saved={saved} />
+          </TabPanel>
+          <TabPanel>
+            <AboutTab settings={settings} set={set} save={save} saved={saved} />
+          </TabPanel>
+          <TabPanel>
+            <AuthPagesTab settings={settings} save={save} saved={saved} />
+          </TabPanel>
+          <TabPanel>
+            <div className="card">
+              <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Manage translatable messages shown to users.</p>
+              <table style={{ width: '100%', marginBottom: 16 }}>
+                <thead><tr><th style={{ textAlign: 'left', width: '30%' }}>Key</th><th style={{ textAlign: 'left' }}>Translation</th></tr></thead>
+                <tbody>
+                  {KEYS.map(({ key, defaults }) => (
+                    <tr key={key}>
+                      <td style={{ padding: '8px 0', fontFamily: 'monospace', fontSize: 13, color: '#555' }}>{key}</td>
+                      <td style={{ padding: '8px 0' }}>
+                        <input value={translations[key] || ''} onChange={e => update(key, e.target.value)}
+                          placeholder={defaults?.en || ''} style={{ marginBottom: 0, width: '100%' }} dir={activeLangObj?.rtl ? 'rtl' : 'ltr'} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 32 }}>
+                <button className="btn btn-primary" onClick={saveAll}>Save</button>
+                {saved && <span style={{ color: 'green', fontSize: 13 }}>✓ Saved</span>}
+              </div>
+              <h3 style={{ marginTop: 32, marginBottom: 8 }}>Button Labels</h3>
+              <div className="card">
+                {BUTTONS.map(b => (
+                  <div key={b} style={{ display: 'grid', gridTemplateColumns: '140px 44px 110px 1fr', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                    <span style={{ fontWeight: 600, fontSize: 12, color: '#555' }}>{b}</span>
+                    <input type="color" value={btnData[b]?.color || '#232f3e'} onChange={e => updateBtnColor(b, e.target.value)}
+                      style={{ width: 40, height: 32, border: 'none', padding: 0, cursor: 'pointer', background: 'none' }} />
+                    <span style={{ background: btnData[b]?.color || '#232f3e', color: '#fff', padding: '3px 10px', borderRadius: 4, fontSize: 12, whiteSpace: 'nowrap', textAlign: 'center' }}>
+                      {btnData[b]?.labels?.[selectedLang] || b}
+                    </span>
+                    <input value={btnData[b]?.labels?.[selectedLang] || ''} dir={activeLangObj?.rtl ? 'rtl' : 'ltr'}
+                      onChange={e => updateBtnLabel(b, selectedLang, e.target.value)} style={{ marginBottom: 0 }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button className="btn btn-primary" onClick={saveBtnRows}>Save Button Labels</button>
+                {btnSaved && <span style={{ color: 'green', fontSize: 13, alignSelf: 'center' }}>✓ Saved</span>}
+              </div>
+            </div>
+          </TabPanel>
+          <TabPanel>
+            <>
+            {/* <h3 style={{ marginBottom: 12 }}>UI Labels</h3> */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '2px solid #eee', flexWrap: 'wrap' }}>
+                {UI_LABEL_TABS.map((t, i) => (
+                  <button key={t.id} onClick={() => setUiTab(i)}
+                    style={{ padding: '6px 14px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: uiTab === i ? 700 : 400, borderBottom: uiTab === i ? '2px solid #febd69' : '2px solid transparent', marginBottom: -2, fontSize: 13 }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {UI_LABEL_TABS[uiTab] && (
+                <table style={{ width: '100%', marginBottom: 16 }}>
+                  <thead><tr><th style={{ textAlign: 'left', width: '30%' }}>Key</th><th style={{ textAlign: 'left' }}>Translation</th></tr></thead>
+                  <tbody>
+                    {UI_LABEL_TABS[uiTab].keys.map(({ key, defaults }) => (
+                      <tr key={key}>
+                        <td style={{ padding: '8px 0', fontFamily: 'monospace', fontSize: 12, color: '#555' }}>{key}</td>
+                        <td style={{ padding: '8px 0' }}>
+                          <input value={translations[key] || ''} onChange={e => update(key, e.target.value)}
+                            placeholder={defaults?.en || ''} style={{ marginBottom: 0, width: '100%' }} dir={activeLangObj?.rtl ? 'rtl' : 'ltr'} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 32 }}>
+                <button className="btn btn-primary" onClick={saveAll}>Save UI Labels</button>
+                {saved && <span style={{ color: 'green', fontSize: 13 }}>✓ Saved</span>}
+              </div></>
+          </TabPanel>
+          <TabPanel>
+            <div className="card">
+              <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+                Labels shown on the FAQ page — page title, "Ask a Question" section heading, form placeholders and messages.
+              </p>
+              <table style={{ width: '100%', marginBottom: 12 }}>
+                <thead><tr><th style={{ textAlign: 'left', width: '35%' }}>Field</th><th style={{ textAlign: 'left' }}>Text ({activeLangObj?.flag} {activeLangObj?.label})</th></tr></thead>
+                <tbody>
+                  {FAQ_LABEL_FIELDS.map(({ key, label, placeholder }) => (
+                    <tr key={key}>
+                      <td style={{ padding: '7px 0', fontSize: 13, color: '#555' }}>{label}</td>
+                      <td style={{ padding: '7px 0' }}>
+                        <input value={faqPc[key] || ''} dir={activeLangObj?.rtl ? 'rtl' : 'ltr'} placeholder={placeholder}
+                          onChange={e => updateFaqPc(key, e.target.value)} style={{ marginBottom: 0, width: '100%' }} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="btn btn-primary" onClick={saveFaqContent}>Save</button>
+                {faqSaved && <span style={{ color: 'green', fontSize: 13 }}>✓ Saved</span>}
+              </div>
+            </div>
+          </TabPanel>
+          <TabPanel>
+            <div className="card">
+              <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+                Labels shown on the Checkout page — step names, field labels, shipping, payment, and confirmation text.
+              </p>
+              <table style={{ width: '100%', marginBottom: 12 }}>
+                <thead><tr><th style={{ textAlign: 'left', width: '35%' }}>Field</th><th style={{ textAlign: 'left' }}>Text ({activeLangObj?.flag} {activeLangObj?.label})</th></tr></thead>
+                <tbody>
+                  {CHECKOUT_LABEL_FIELDS.map(({ key, placeholder }) => (
+                    <tr key={key}>
+                      <td style={{ padding: '6px 0', fontSize: 12, color: '#555', fontFamily: 'monospace' }}>{key}</td>
+                      <td style={{ padding: '6px 0' }}>
+                        <input value={checkoutPc[key] || ''} dir={activeLangObj?.rtl ? 'rtl' : 'ltr'} placeholder={placeholder}
+                          onChange={e => updateCheckoutPc(key, e.target.value)} style={{ marginBottom: 0, width: '100%' }} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="btn btn-primary" onClick={saveCheckoutContent}>Save</button>
+                {checkoutSaved && <span style={{ color: 'green', fontSize: 13 }}>✓ Saved</span>}
+              </div>
+            </div>
+          </TabPanel>
+          </Tabs>
+          </div>
+    
+    </>
   );
 }
 
@@ -1553,29 +1831,30 @@ function AuthPagesTab({ settings, save, saved }) {
   const [localSaved, setLocalSaved] = useState(false);
 
   const FIELDS = [
-    { key: 'login_title', label: 'Login — Page Title', default: 'Login' },
-    { key: 'login_identifier', label: 'Login — Email/Phone Label', default: 'Email or Phone' },
-    { key: 'login_identifier_placeholder', label: 'Login — Email/Phone Placeholder', default: 'email@example.com or +1234567890' },
-    { key: 'login_password', label: 'Login — Password Label', default: 'Password' },
-    { key: 'login_button', label: 'Login — Button Text', default: 'Login' },
-    { key: 'login_forgot', label: 'Login — Forgot Password Link', default: 'Forgot Password?' },
-    { key: 'login_no_account', label: 'Login — No Account Text', default: 'Don\'t have an account?' },
-    { key: 'register_title', label: 'Register — Page Title', default: 'Register' },
-    { key: 'register_button_short', label: 'Register — Button (on Login page)', default: 'Register' },
-    { key: 'register_identifier', label: 'Register — Email/Phone Label', default: 'Email or Phone' },
-    { key: 'register_password', label: 'Register — Password Label', default: 'Password' },
-    { key: 'register_button', label: 'Register — Button Text', default: 'Send Verification Code' },
-    { key: 'register_has_account', label: 'Register — Has Account Text', default: 'Already have an account?' },
-    { key: 'verify_title', label: 'Verify — Instruction Text', default: 'Enter the 5-digit code sent to' },
-    { key: 'verify_button', label: 'Verify — Button Text', default: 'Verify & Create Account' },
-    { key: 'verify_resend', label: 'Verify — Resend Button', default: 'Resend Code' },
-    { key: 'forgot_title', label: 'Forgot Password — Title', default: 'Forgot Password' },
-    { key: 'forgot_button', label: 'Forgot Password — Button', default: 'Send Reset Code' },
-    { key: 'forgot_back', label: 'Forgot Password — Back Link', default: '← Back to Login' },
-    { key: 'reset_title', label: 'Reset Password — Title', default: 'Reset Password' },
-    { key: 'reset_code_label', label: 'Reset — Code Label', default: 'Code' },
-    { key: 'reset_newpass_label', label: 'Reset — New Password Label', default: 'New Password' },
-    { key: 'reset_button', label: 'Reset — Button Text', default: 'Reset Password' },
+    { key: 'login_title',                    label: 'Login — Page Title',                    en: 'Login', },
+    { key: 'login_identifier',               label: 'Login — Email/Phone Label',              en: 'Email or Phone', },
+    { key: 'login_identifier_placeholder',   label: 'Login — Email/Phone Placeholder',        en: 'email@example.com or +1234567890', },
+    { key: 'login_password',                 label: 'Login — Password Label',                 en: 'Password', },
+    { key: 'login_button',                   label: 'Login — Button Text',                    en: 'Login', },
+    { key: 'login_forgot',                   label: 'Login — Forgot Password Link',           en: 'Forgot Password?', },
+    { key: 'login_no_account',               label: 'Login — No Account Text',                en: "Don't have an account?", },
+    { key: 'register_title',                 label: 'Register — Page Title',                  en: 'Register', },
+    { key: 'register_button_short',          label: 'Register — Button (on Login page)',      en: 'Register', },
+    { key: 'register_identifier',            label: 'Register — Email/Phone Label',           en: 'Email or Phone', },
+    { key: 'register_password',              label: 'Register — Password Label',              en: 'Password', },
+    { key: 'register_button',                label: 'Register — Button Text',                 en: 'Send Verification Code', },
+    { key: 'register_has_account',           label: 'Register — Has Account Text',            en: 'Already have an account?', },
+    { key: 'verify_title',                   label: 'Verify — Instruction Text',              en: 'Enter the 5-digit code sent to', },
+    { key: 'verify_button',                  label: 'Verify — Button Text',                   en: 'Verify & Create Account', },
+    { key: 'verify_resend',                  label: 'Verify — Resend Button',                 en: 'Resend Code', },
+    { key: 'forgot_title',                   label: 'Forgot Password — Title',                en: 'Forgot Password', },
+    { key: 'forgot_button',                  label: 'Forgot Password — Button',               en: 'Send Reset Code', },
+    { key: 'forgot_back',                    label: 'Forgot Password — Back Link',            en: '← Back to Login', },
+    { key: 'reset_title',                    label: 'Reset Password — Title',                 en: 'Reset Password', },
+    { key: 'reset_code_label',               label: 'Reset — Code Label',                     en: 'Code', },
+    { key: 'reset_newpass_label',            label: 'Reset — New Password Label',             en: 'New Password', },
+    { key: 'reset_button',                   label: 'Reset — Button Text',                    en: 'Reset Password', },
+    { key: 'logout_button',                  label: 'Logout — Button Text',                   en: 'Logout', },
   ];
 
   useEffect(() => {
@@ -1629,7 +1908,7 @@ function AuthPagesTab({ settings, save, saved }) {
                 <td style={{ padding: '6px 8px 6px 0', fontSize: 13, color: '#555' }}>{f.label}</td>
                 <td style={{ padding: '6px 0' }}>
                   <input value={get(f.key)} onChange={e => update(f.key, e.target.value)}
-                    placeholder={f.default} dir={activeLangObj?.rtl ? 'rtl' : 'ltr'}
+                    placeholder={f[activeLang] || f.en} dir={activeLangObj?.rtl ? 'rtl' : 'ltr'}
                     style={{ marginBottom: 0, width: '100%' }} />
                 </td>
               </tr>
