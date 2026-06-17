@@ -4,8 +4,211 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useCart } from '../context/CartContext';
 import { useButtonLabels } from '../context/ButtonLabelsContext';
+import { useAuth } from '../context/AuthContext';
 
 const base = process.env.REACT_APP_API_URL || '';
+
+const EMPTY_SLIDE = { title: '', subtitle: '', btnText: '', link: '/products', image: '', bg: '#1a1a2e' };
+
+const PRESET_LINKS = [
+  { label: 'Products', value: '/products' },
+  { label: 'Home', value: '/' },
+  { label: 'About Us', value: '/about' },
+  { label: 'Contact Us', value: '/contact' },
+  { label: 'FAQ', value: '/faq' },
+  { label: 'Blog', value: '/blog' },
+  { label: 'Cart', value: '/cart' },
+];
+
+function ImagePicker({ value, onChange }) {
+  const [gallery, setGallery] = useState([]);
+  const [showGallery, setShowGallery] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useState(null);
+
+  const loadGallery = () => api.get('/api/settings/images').then(r => setGallery(r.data)).catch(() => {});
+
+  const upload = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    setUploading(true);
+    const fd = new FormData(); fd.append('image', file);
+    try { const r = await api.post('/api/settings/upload-image', fd); onChange(r.data.url); setShowGallery(false); }
+    finally { setUploading(false); }
+  };
+
+  const preview = value ? (value.startsWith('http') ? value : `${base}${value}`) : null;
+
+  return (
+    <div className="form-group">
+      <label>Image</label>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <button type="button" className="btn btn-secondary" style={{ fontSize: 12 }}
+          onClick={() => { loadGallery(); setShowGallery(s => !s); }}>
+          🖼 {showGallery ? 'Close gallery' : 'Choose from gallery'}
+        </button>
+        <label className="btn btn-secondary" style={{ fontSize: 12, cursor: 'pointer', margin: 0 }}>
+          {uploading ? 'Uploading…' : '⬆ Upload'}
+          <input type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={upload} />
+        </label>
+      </div>
+      {showGallery && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 200, overflowY: 'auto', border: '1px solid #ddd', borderRadius: 6, padding: 8, marginBottom: 8 }}>
+          {gallery.map(img => (
+            <img key={img.filename} src={`${base}${img.url}`} alt={img.filename}
+              onClick={() => { onChange(img.url); setShowGallery(false); }}
+              style={{ width: 80, height: 56, objectFit: 'cover', borderRadius: 4, cursor: 'pointer', border: value === img.url ? '3px solid #febd69' : '2px solid transparent' }} />
+          ))}
+          {gallery.length === 0 && <span style={{ fontSize: 13, color: '#aaa' }}>No images yet.</span>}
+        </div>
+      )}
+      {preview && <img src={preview} alt="" style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: 6 }} onError={e => e.target.style.display = 'none'} />}
+    </div>
+  );
+}
+
+function SlideForm({ form, setForm, onSave, onCancel, isNew }) {
+  const [customLink, setCustomLink] = useState(!PRESET_LINKS.find(l => l.value === form.link));
+
+  return (
+    <div style={{ background: '#f9f9f9', border: '1px solid #ddd', borderRadius: 8, padding: 16 }}>
+      <h4 style={{ marginBottom: 12 }}>{isNew ? 'New Slide' : 'Edit Slide'}</h4>
+
+      {[{ key: 'title', label: 'Title' }, { key: 'subtitle', label: 'Subtitle' }, { key: 'btnText', label: 'Button text' }].map(({ key, label }) => (
+        <div className="form-group" key={key}>
+          <label>{label}</label>
+          <input value={form[key] || ''} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+        </div>
+      ))}
+
+      {/* Link — dropdown + optional custom */}
+      <div className="form-group">
+        <label>Button link</label>
+        <select value={customLink ? '__custom__' : (form.link || '/products')}
+          onChange={e => {
+            if (e.target.value === '__custom__') { setCustomLink(true); }
+            else { setCustomLink(false); setForm(f => ({ ...f, link: e.target.value })); }
+          }} style={{ marginBottom: 4 }}>
+          {PRESET_LINKS.map(l => <option key={l.value} value={l.value}>{l.label} ({l.value})</option>)}
+          <option value="__custom__">✏️ Custom link…</option>
+        </select>
+        {customLink && (
+          <input placeholder="/custom-path or https://..." value={form.link || ''}
+            onChange={e => setForm(f => ({ ...f, link: e.target.value }))} style={{ marginBottom: 0 }} />
+        )}
+      </div>
+
+      <ImagePicker value={form.image} onChange={v => setForm(f => ({ ...f, image: v }))} />
+
+      <div className="form-group">
+        <label>Background color</label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="color" value={form.bg || '#1a1a2e'} onChange={e => setForm(f => ({ ...f, bg: e.target.value }))} style={{ width: 48, height: 36, padding: 2, cursor: 'pointer', marginBottom: 0 }} />
+          <input value={form.bg || '#1a1a2e'} onChange={e => setForm(f => ({ ...f, bg: e.target.value }))} style={{ flex: 1, marginBottom: 0 }} />
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button className="btn btn-primary" onClick={onSave}>Save</button>
+        <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function HeroManager({ slides, onSave }) {
+  const [open, setOpen] = useState(false);
+  const [localSlides, setLocalSlides] = useState(slides);
+  const [editIdx, setEditIdx] = useState(null);
+  const [form, setForm] = useState(EMPTY_SLIDE);
+
+  // sync when slides prop changes
+  useEffect(() => setLocalSlides(slides), [slides]);
+
+  const save = async (updated) => {
+    await api.put('/api/settings', { hero_slides: JSON.stringify(updated) });
+    setLocalSlides(updated);
+    onSave(updated);
+  };
+
+  const submitSlide = async () => {
+    const updated = editIdx === 'new'
+      ? [...localSlides, { ...form }]
+      : localSlides.map((s, i) => i === editIdx ? { ...form } : s);
+    await save(updated);
+    setEditIdx(null);
+  };
+
+  const del = async (i) => {
+    if (!window.confirm('Remove this slide?')) return;
+    await save(localSlides.filter((_, idx) => idx !== i));
+  };
+
+  const move = async (i, dir) => {
+    const arr = [...localSlides];
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    await save(arr);
+  };
+
+  return (
+    <>
+      <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 900 }}>
+        <button onClick={() => setOpen(o => !o)}
+          style={{ background: open ? '#febd69' : '#1a1a2e', color: open ? '#000' : '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', cursor: 'pointer', fontSize: 14, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+          🖼 {open ? 'Close' : 'Edit Heroes'}
+        </button>
+      </div>
+
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 950 }} />
+          <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 440, maxWidth: '95vw', background: '#fff', zIndex: 1000, overflowY: 'auto', padding: 20, boxShadow: '-4px 0 24px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>🖼 Hero Slides</h3>
+              <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {editIdx !== null ? (
+              <SlideForm
+                form={form} setForm={setForm}
+                onSave={submitSlide} onCancel={() => setEditIdx(null)}
+                isNew={editIdx === 'new'}
+              />
+            ) : (
+              <>
+                <button className="btn btn-primary" style={{ width: '100%', marginBottom: 12 }}
+                  onClick={() => { setForm(EMPTY_SLIDE); setEditIdx('new'); }}>
+                  + Add Slide
+                </button>
+                {localSlides.map((s, i) => (
+                  <div key={i} style={{ border: '1px solid #ddd', borderRadius: 8, marginBottom: 10, overflow: 'hidden' }}>
+                    <div style={{ position: 'relative', height: 90, background: s.bg || '#1a1a2e' }}>
+                      {s.image && <img src={s.image.startsWith('http') ? s.image : `${base}${s.image}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} onError={e => e.target.style.display = 'none'} />}
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>
+                        <strong style={{ fontSize: 15 }}>{s.title || '(no title)'}</strong>
+                        {s.subtitle && <span style={{ fontSize: 12, opacity: 0.85 }}>{s.subtitle}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, padding: 8, background: '#f9f9f9' }}>
+                      <button onClick={() => move(i, -1)} style={sBtn('#555')} disabled={i === 0}>↑</button>
+                      <button onClick={() => move(i, 1)} style={sBtn('#555')} disabled={i === localSlides.length - 1}>↓</button>
+                      <button onClick={() => { setForm({ ...EMPTY_SLIDE, ...s }); setEditIdx(i); }} style={sBtn('#2980b9')}>✏️ Edit</button>
+                      <button onClick={() => del(i)} style={sBtn('#e74c3c')}>🗑</button>
+                    </div>
+                  </div>
+                ))}
+                {localSlides.length === 0 && <p style={{ color: '#aaa', fontSize: 13 }}>No slides yet.</p>}
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+const sBtn = (bg) => ({ background: bg, color: '#fff', border: 'none', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontSize: 13 });
 
 // Find the price for the current language — checks langs[] first, falls back to currency match
 function findPrice(prices, lang, currency) {
@@ -62,6 +265,8 @@ function ProductCard({ p, lang, currency, symbol, fractionDigits = 2, onAdd, onC
 export default function Home() {
   const { i18n, t } = useTranslation();
   const { btn } = useButtonLabels();
+  const { user } = useAuth();
+  const isAdmin = user && (user.role === 'admin' || user.role === 'cooperatore');
   const [products, setProducts] = useState([]);
   const [allSlides, setSlides] = useState([]);
   const [slideIdx, setSlideIdx] = useState(0);
@@ -77,6 +282,8 @@ export default function Home() {
     new:   { en: 'New Arrivals',  fa: 'جدیدترین‌ها',      ar: 'الوافدون الجدد' },
     deals: { en: 'Best Deals',    fa: 'بهترین تخفیف‌ها',  ar: 'أفضل العروض' },
   });
+  const [editingTabs, setEditingTabs] = useState(false);
+  const [tabForm, setTabForm] = useState({ all: '', new: '', deals: '' });
 
   const lang = i18n.language?.split('-')[0];
   const sc = (() => { try { return JSON.parse(localStorage.getItem('selectedCurrency')) || {}; } catch { return {}; } })();
@@ -208,9 +415,10 @@ export default function Home() {
         </div>
       )}
 
+
       {/* Tabs: Best Deals / New Arrivals / All Products */}
       <div className="page">
-        <div style={{ display: 'flex', gap: 4, borderBottom: '2px solid #eee', marginBottom: 20 ,...(document.documentElement.dir === 'rtl' ? { textAlign: 'right'  , marginRight: 'auto', left: 0 } : { textAlign: 'left', marginLeft: 'auto' , right: 0  }),}}>
+        <div style={{ display: 'flex', gap: 4, borderBottom: '2px solid #eee', marginBottom: 20, alignItems: 'center' ,...(document.documentElement.dir === 'rtl' ? { textAlign: 'right'  , marginRight: 'auto', left: 0 } : { textAlign: 'left', marginLeft: 'auto' , right: 0  }),}}>
           
           <button type="button" onClick={() => setTab('all')}
             style={{ padding: '8px 20px', border: 'none', borderBottom: tab === 'all' ? '2px solid var(--primary)' : '2px solid transparent', background: 'none', cursor: 'pointer', fontWeight: tab === 'all' ? 700 : 400, fontSize: 15, marginBottom: -2 }}>
@@ -226,7 +434,35 @@ export default function Home() {
               🔥 {tabLabels.deals[lang] || tabLabels.deals.en}
             </button>
           )}
+          {isAdmin && !editingTabs && (
+            <button onClick={() => { setTabForm({ all: tabLabels.all[lang] || '', new: tabLabels.new[lang] || '', deals: tabLabels.deals[lang] || '' }); setEditingTabs(true); }}
+              style={{ background: '#2980b9', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: 13, marginLeft: 'auto' }}>✏️</button>
+          )}
         </div>
+        {isAdmin && editingTabs && (
+          <div style={{ background: '#fffbe6', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+            {[
+              { key: 'all', label: 'All Products', fallback: 'All Products' },
+              { key: 'new', label: 'New Arrivals', fallback: 'New Arrivals' },
+              { key: 'deals', label: 'Best Deals', fallback: 'Best Deals' },
+            ].map(({ key, label, fallback }) => (
+              <div className="form-group" key={key}>
+                <label style={{ fontSize: 12, color: '#666' }}>{label}</label>
+                <input value={tabForm[key] || ''} placeholder={fallback}
+                  onChange={e => setTabForm(f => ({ ...f, [key]: e.target.value }))} />
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={async () => {
+                const updated = { ...tabLabels, all: { ...tabLabels.all, [lang]: tabForm.all }, new: { ...tabLabels.new, [lang]: tabForm.new }, deals: { ...tabLabels.deals, [lang]: tabForm.deals } };
+                await api.put('/api/settings', { home_tab_labels: JSON.stringify(updated) });
+                setTabLabels(updated);
+                setEditingTabs(false);
+              }}>Save</button>
+              <button className="btn btn-secondary" onClick={() => setEditingTabs(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {tab === 'deals' && (
           <div className="grid">
@@ -262,6 +498,7 @@ export default function Home() {
           </>
         )}
       </div>
+      {isAdmin && <HeroManager slides={allSlides} onSave={setSlides} />}
     </div>
   );
 }

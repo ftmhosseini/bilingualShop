@@ -18,7 +18,7 @@ export default function AdminLayout() {
           {t('admin')}
         </div>
         <NavLink to="/admin" end>{t('dashboard')}</NavLink>
-        <NavLink to="/admin/products">{t('manageProducts')}</NavLink>
+        <NavLink to="/products">{t('manageProducts')}</NavLink>
         {user.role === 'admin' && <NavLink to="/admin/users">{t('manageUsers')}</NavLink>}
         <NavLink to="/admin/gallery">{t('Gallery')}</NavLink>
         <NavLink to="/admin/orders">{t('Orders')}</NavLink>

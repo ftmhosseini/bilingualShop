@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../api';
+import { useAuth } from '../context/AuthContext';
 
 const COUNTRIES = ['Canada', 'United States', 'United Kingdom', 'Iran', 'Saudi Arabia', 'UAE', 'Other'];
 const IRAN_PROVINCES = [
@@ -83,22 +84,37 @@ function AddressForm({ initial, onSave, onCancel, tr = {} }) {
 
 export default function Profile() {
   const { i18n } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user && (user.role === 'admin' || user.role === 'cooperatore');
   const lang = i18n.language?.split('-')[0];
-  const isRTL = ['fa', 'ar'].includes(lang);
+  const isRTL = document.documentElement.dir === 'rtl';
   const [tr, setTr] = useState({});
   const [form, setForm] = useState({ email: '', phone: '', first_name: '', last_name: '', current_password: '', new_password: '', confirm_password: '' });
   const [addresses, setAddresses] = useState([]);
   const [editingAddr, setEditingAddr] = useState(null);
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
+  const [editingLabels, setEditingLabels] = useState(false);
+  const [labelForm, setLabelForm] = useState({});
+  const [labels, setLabels] = useState({});
 
-  const T = (key, fallback) => tr[key] || fallback;
+  const T = (key, fallback) => labels[key] || tr[key] || fallback;
 
   useEffect(() => {
     api.get(`/api/translations/${lang}`).then(r => setTr(r.data)).catch(() => {});
+    api.get('/api/content/profile').then(r => {
+      const row = r.data.find(c => c.lang === lang) || r.data.find(c => c.lang === 'en');
+      if (row) { try { setLabels(JSON.parse(row.content || '{}')); } catch {} }
+    }).catch(() => {});
     api.get('/api/auth/profile').then(r => setForm(f => ({ ...f, email: r.data.email || '', phone: r.data.phone || '', first_name: r.data.first_name || '', last_name: r.data.last_name || '' })));
     api.get('/api/auth/addresses').then(r => setAddresses(r.data));
   }, [lang]);
+
+  const saveLabels = async () => {
+    await api.put(`/api/content/profile/${lang}`, { title: '', content: JSON.stringify(labelForm) });
+    setLabels(labelForm);
+    setEditingLabels(false);
+  };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -147,7 +163,41 @@ export default function Profile() {
 
   return (
     <div className="page" dir={isRTL ? 'rtl' : 'ltr'}>
-      <h2 style={{ marginBottom: 20 }}>{T('profile.title', 'Edit Profile')}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <h2 style={{ margin: 0 }}>{T('profile.title', 'Edit Profile')}</h2>
+        {isAdmin && !editingLabels && (
+          <button onClick={() => { setLabelForm(labels); setEditingLabels(true); }} style={{ background: '#2980b9', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: 13 }}>✏️</button>
+        )}
+      </div>
+      {editingLabels && (
+        <div style={{ background: '#fffbe6', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 24 }}>
+          {[
+            { key: 'profile.title', label: 'Page Title', fallback: 'Edit Profile' },
+            { key: 'profile.firstName', label: 'First Name label', fallback: 'First Name' },
+            { key: 'profile.lastName', label: 'Last Name label', fallback: 'Last Name' },
+            { key: 'profile.email', label: 'Email label', fallback: 'Email' },
+            { key: 'profile.phone', label: 'Phone label', fallback: 'Phone' },
+            { key: 'profile.passwordHint', label: 'Password hint', fallback: 'Leave password fields empty to keep current password.' },
+            { key: 'profile.currentPassword', label: 'Current Password', fallback: 'Current Password' },
+            { key: 'profile.newPassword', label: 'New Password', fallback: 'New Password' },
+            { key: 'profile.confirmPassword', label: 'Confirm Password', fallback: 'Confirm New Password' },
+            { key: 'profile.saveChanges', label: 'Save button', fallback: 'Save Changes' },
+            { key: 'profile.saved', label: 'Saved message', fallback: 'Saved' },
+            { key: 'address.saved', label: 'Addresses heading', fallback: 'Saved Addresses' },
+            { key: 'address.add', label: 'Add button', fallback: '+ Add' },
+          ].map(({ key, label, fallback }) => (
+            <div className="form-group" key={key}>
+              <label style={{ fontSize: 12, color: '#666' }}>{label}</label>
+              <input value={labelForm[key] || ''} placeholder={fallback} dir={isRTL ? 'rtl' : 'ltr'}
+                onChange={e => setLabelForm(f => ({ ...f, [key]: e.target.value }))} />
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={saveLabels}>Save</button>
+            <button className="btn btn-secondary" onClick={() => setEditingLabels(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
       <div className="profile-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, alignItems: 'start' }}>
         {/* Profile form */}
         <form className="card" onSubmit={submit}>
